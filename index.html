@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1f0;
+    --surface: #ffffff;
+    --ink: #1c2a2a;
+    --muted: #5d6b6b;
+    --line: #d5dcdb;
+    --accent: #1f6f6b;
+    --accent-ink: #ffffff;
+    --danger: #a63d2f;
+    --c-sadhanapada: #1f6f6b;
+    --c-personal: #7a4a7d;
+    --c-others: #5b6770;
+    --font: "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .panel h2 { font-size: 1.05rem; margin: 0 0 14px; font-weight: 600; }
+
+  form { display: grid; grid-template-columns: 90px 170px 1fr 220px; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.notes { grid-column: 1 / -1; }
+  label { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+  input, select, textarea {
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid #b9c4c3;
+    border-radius: 6px;
+    padding: 9px 10px;
+    width: 100%;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible,
+  button:focus-visible {
+    outline: 3px solid #8fc9c4;
+    outline-offset: 1px;
+  }
+  .actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    border-radius: 6px; padding: 9px 16px;
+    border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.ghost { background: transparent; color: var(--accent); }
+  button.danger { border-color: var(--danger); color: var(--danger); background: transparent; }
+  button.small { padding: 4px 10px; font-size: 0.85rem; font-weight: 500; }
+  .msg { color: var(--danger); font-size: 0.9rem; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin: 28px 0 12px;
+  }
+  .toolbar .grow { flex: 1 1 200px; }
+  .toolbar select, .toolbar input { width: auto; }
+  .toolbar input[type="search"] { width: 100%; }
+  .count { color: var(--muted); font-size: 0.9rem; margin-left: auto; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  th, td { text-align: left; padding: 11px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { font-size: 0.85rem; font-weight: 600; color: var(--muted); background: #f6f8f7; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.no { width: 56px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  td.date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.notes { color: #364444; white-space: pre-wrap; max-width: 320px; }
+  td.row-actions { white-space: nowrap; text-align: right; }
+  td.row-actions button { margin-left: 4px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 0.9rem;
+  }
+  .tag::before {
+    content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--c-others));
+  }
+  .empty { padding: 36px 20px; text-align: center; color: var(--muted); }
+  tr.editing td { background: #eaf4f3; }
+
+  .data-tools { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
+
+  @media (max-width: 760px) {
+    form { grid-template-columns: 1fr 1fr; }
+    .field.event, .field.category { grid-column: 1 / -1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Event Log</h1>
+  <p class="sub">Record events with a date, category and notes.</p>
+
+  <section class="panel">
+    <h2 id="form-title">Add an event</h2>
+    <form id="form" autocomplete="off">
+      <div class="field">
+        <label for="no">No</label>
+        <input id="no" type="number" min="1" step="1" required>
+      </div>
+      <div class="field">
+        <label for="date">Date</label>
+        <input id="date" type="date" required>
+      </div>
+      <div class="field event">
+        <label for="event">Event</label>
+        <input id="event" type="text" required maxlength="200">
+      </div>
+      <div class="field category">
+        <label for="category">Category</label>
+        <select id="category" required></select>
+      </div>
+      <div class="field notes">
+        <label for="notes">Notes</label>
+        <textarea id="notes"></textarea>
+      </div>
+      <div class="actions">
+        <button type="submit" id="save">Add event</button>
+        <button type="button" class="ghost" id="cancel" hidden>Cancel edit</button>
+        <span class="msg" id="msg" role="alert"></span>
+      </div>
+    </form>
+  </section>
+
+  <div class="toolbar">
+    <div class="grow"><input type="search" id="search" placeholder="Search events and notes" aria-label="Search events and notes"></div>
+    <select id="filter" aria-label="Filter by category"></select>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>No</th><th>Date</th><th>Event</th><th>Category</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No events yet. Add your first one above.</div>
+  </div>
+
+  <div class="data-tools">
+    <button class="ghost" id="export-csv">Download CSV</button>
+    <button class="ghost" id="export-json">Download backup</button>
+    <button class="ghost" id="import-btn">Restore backup</button>
+    <input type="file" id="import-file" accept="application/json,.json" hidden>
+  </div>
+  <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Settings: edit the category list here ----
+  var CATEGORIES = ["Sadhanapada Program", "Personal", "Others"];
+  var COLORS = {
+    "Sadhanapada Program": "var(--c-sadhanapada)",
+    "Personal": "var(--c-personal)",
+    "Others": "var(--c-others)"
+  };
+  var STORAGE_KEY = "event-log-v1";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    form: $("form"), no: $("no"), date: $("date"), event: $("event"),
+    category: $("category"), notes: $("notes"), save: $("save"), cancel: $("cancel"),
+    msg: $("msg"), title: $("form-title"), rows: $("rows"), empty: $("empty"),
+    search: $("search"), filter: $("filter"), count: $("count")
+  };
+
+  var entries = load();
+  var editingNo = null;
+
+  // ---- Storage ----
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var data = raw ? JSON.parse(raw) : [];
+      return Array.isArray(data) ? data : [];
+    } catch (e) { return []; }
+  }
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch (e) {
+      showMsg("Could not save in this browser. Download a backup to keep your data.");
+    }
+  }
+
+  // ---- Helpers ----
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function formatDate(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    if (p.length !== 3) return iso;
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  function nextNo() {
+    return entries.reduce(function (m, e) { return Math.max(m, +e.no || 0); }, 0) + 1;
+  }
+  function showMsg(t) { els.msg.textContent = t || ""; }
+
+  // ---- Setup controls ----
+  CATEGORIES.forEach(function (c) {
+    els.category.insertAdjacentHTML("beforeend", '<option value="' + esc(c) + '">' + esc(c) + "</option>");
+  });
+  els.filter.insertAdjacentHTML("beforeend", '<option value="">All categories</option>');
+  CATEGORIES.forEach(function (c) {
+    els.filter.insertAdjacentHTML("beforeend", '<option value="' + esc(c) + '">' + esc(c) + "</option>");
+  });
+
+  function resetForm() {
+    editingNo = null;
+    els.form.reset();
+    els.no.value = nextNo();
+    els.date.value = today();
+    els.save.textContent = "Add event";
+    els.title.textContent = "Add an event";
+    els.cancel.hidden = true;
+    showMsg("");
+  }
+
+  // ---- Render ----
+  function render() {
+    var q = els.search.value.trim().toLowerCase();
+    var cat = els.filter.value;
+    var list = entries.filter(function (e) {
+      if (cat && e.category !== cat) return false;
+      if (!q) return true;
+      return (e.event + " " + e.notes).toLowerCase().indexOf(q) !== -1;
+    }).sort(function (a, b) {
+      return (b.date || "").localeCompare(a.date || "") || b.no - a.no;
+    });
+
+    els.rows.innerHTML = list.map(function (e) {
+      var color = COLORS[e.category] || "var(--c-others)";
+      return '<tr class="' + (e.no === editingNo ? "editing" : "") + '">' +
+        '<td class="no">' + esc(e.no) + "</td>" +
+        '<td class="date">' + esc(formatDate(e.date)) + "</td>" +
+        "<td>" + esc(e.event) + "</td>" +
+        '<td><span class="tag" style="--dot:' + color + '">' + esc(e.category) + "</span></td>" +
+        '<td class="notes">' + esc(e.notes) + "</td>" +
+        '<td class="row-actions">' +
+          '<button class="ghost small" data-act="edit" data-no="' + esc(e.no) + '">Edit</button>' +
+          '<button class="danger small" data-act="del" data-no="' + esc(e.no) + '">Delete</button>' +
+        "</td></tr>";
+    }).join("");
+
+    els.empty.hidden = list.length > 0;
+    els.empty.textContent = entries.length ? "No events match your search or filter." : "No events yet. Add your first one above.";
+    els.count.textContent = list.length + (list.length === 1 ? " event" : " events");
+  }
+
+  // ---- Events ----
+  els.form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var no = parseInt(els.no.value, 10);
+    var entry = {
+      no: no,
+      date: els.date.value,
+      event: els.event.value.trim(),
+      category: els.category.value,
+      notes: els.notes.value.trim()
+    };
+    if (!no || no < 1) { showMsg("Enter a number of 1 or more."); return; }
+    if (!entry.event) { showMsg("Enter the event."); return; }
+    var clash = entries.some(function (e) { return e.no === no && e.no !== editingNo; });
+    if (clash) { showMsg("No " + no + " is already used. Choose a different number."); return; }
+
+    if (editingNo !== null) {
+      entries = entries.map(function (e) { return e.no === editingNo ? entry : e; });
+    } else {
+      entries.push(entry);
+    }
+    persist();
+    resetForm();
+    render();
+  });
+
+  els.cancel.addEventListener("click", function () { resetForm(); render(); });
+
+  els.rows.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button[data-act]");
+    if (!btn) return;
+    var no = parseInt(btn.getAttribute("data-no"), 10);
+    var entry = entries.filter(function (e) { return e.no === no; })[0];
+    if (!entry) return;
+    if (btn.getAttribute("data-act") === "edit") {
+      editingNo = no;
+      els.no.value = entry.no;
+      els.date.value = entry.date;
+      els.event.value = entry.event;
+      els.category.value = entry.category;
+      els.notes.value = entry.notes;
+      els.save.textContent = "Save changes";
+      els.title.textContent = "Edit event " + no;
+      els.cancel.hidden = false;
+      showMsg("");
+      render();
+      els.form.scrollIntoView({ behavior: "smooth", block: "start" });
+      els.event.focus();
+    } else if (confirm('Delete event ' + no + ' "' + entry.event + '"?')) {
+      entries = entries.filter(function (e) { return e.no !== no; });
+      if (editingNo === no) resetForm();
+      persist();
+      render();
+    }
+  });
+
+  els.search.addEventListener("input", render);
+  els.filter.addEventListener("change", render);
+
+  // ---- Export / import ----
+  function download(name, text, type) {
+    var blob = new Blob([text], { type: type });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  function csvCell(v) {
+    var s = String(v == null ? "" : v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  $("export-csv").addEventListener("click", function () {
+    var sorted = entries.slice().sort(function (a, b) { return a.no - b.no; });
+    var lines = ["No,Date,Event,Category,Notes"].concat(sorted.map(function (e) {
+      return [e.no, e.date, e.event, e.category, e.notes].map(csvCell).join(",");
+    }));
+    download("event-log-" + today() + ".csv", "\ufeff" + lines.join("\r\n"), "text/csv;charset=utf-8");
+  });
+  $("export-json").addEventListener("click", function () {
+    download("event-log-backup-" + today() + ".json", JSON.stringify(entries, null, 2), "application/json");
+  });
+  $("import-btn").addEventListener("click", function () { $("import-file").click(); });
+  $("import-file").addEventListener("change", function (ev) {
+    var file = ev.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        if (!Array.isArray(data)) throw new Error("bad");
+        var clean = data.filter(function (e) { return e && e.no && e.event; }).map(function (e) {
+          return {
+            no: parseInt(e.no, 10),
+            date: String(e.date || ""),
+            event: String(e.event),
+            category: CATEGORIES.indexOf(e.category) !== -1 ? e.category : "Others",
+            notes: String(e.notes || "")
+          };
+        });
+        if (!confirm("Replace the current " + entries.length + " events with " + clean.length + " events from this backup?")) return;
+        entries = clean;
+        persist();
+        resetForm();
+        render();
+      } catch (e) {
+        alert("This file is not a valid backup. Choose a .json file downloaded from this app.");
+      }
+      $("import-file").value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  // ---- Start ----
+  resetForm();
+  render();
+})();
+</script>
+</body>
+</html>
