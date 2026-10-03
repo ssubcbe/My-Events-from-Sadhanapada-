@@ -333,7 +333,7 @@
       render();
       els.form.scrollIntoView({ behavior: "smooth", block: "start" });
       els.event.focus();
-    } else if (confirm('Delete event ' + no + ' "' + entry.event + '"?')) {
+    } else if (confirm('Are you sure you want to delete event ' + no + ' "' + entry.event + '"?\n\nThis cannot be undone.')) {
       entries = entries.filter(function (e) { return e.no !== no; });
       if (editingNo === no) resetForm();
       persist();
