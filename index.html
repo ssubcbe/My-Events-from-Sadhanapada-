@@ -23,6 +23,7 @@
     --c-isha: #D55E00;
     --c-meeting: #00855F;
     --c-others: #2B2B2B;
+    --today: #F2A900;
     --font: "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -165,6 +166,20 @@
   .tl-item:hover .tl-date, .tl-item:focus-visible .tl-date, .tl-item.active .tl-date { color: var(--ink); }
   .tl-item:focus-visible { outline: 3px solid #8fc9c4; outline-offset: -2px; border-radius: 6px; }
 
+  /* Today marker: larger circle with a gentle flash */
+  .tl-today { cursor: default; }
+  .tl-today .tl-dot {
+    width: 30px; height: 30px; background: var(--today); border-width: 4px;
+    animation: todayflash 2.2s ease-in-out infinite;
+  }
+  .tl-item.tl-today:hover .tl-dot { transform: translate(-50%, -50%); }
+  .tl-today .tl-date, .tl-today .tl-title { color: var(--ink); }
+  @keyframes todayflash {
+    0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(242, 169, 0, .55); }
+    50%      { opacity: .55; box-shadow: 0 0 0 9px rgba(242, 169, 0, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .tl-today .tl-dot { animation: none; } }
+
   tr.flash td { animation: rowflash 2.6s ease-out; }
   @keyframes rowflash { from { background: #fbd5b8; } 60% { background: #fbd5b8; } to { background: transparent; } }
 
@@ -255,7 +270,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
-  <p class="hint">Version: 3 Oct 2026 b (new colours, All Category filter)</p>
+  <p class="hint">Version: 3 Oct 2026 c (today marker on timeline)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -398,7 +413,7 @@
 
   $("legend").innerHTML = CATEGORIES.map(function (c) {
     return '<span style="--dot:' + COLORS[c] + '">' + esc(c) + "</span>";
-  }).join("");
+  }).join("") + '<span style="--dot:var(--today)">Today</span>';
 
   function excerpt(text, maxWords) {
     var words = String(text || "").trim().split(/\s+/).filter(Boolean);
@@ -466,6 +481,13 @@
     tlTrack.style.setProperty("--p", ROW_P + "px");
     tlTrack.style.setProperty("--item", ITEM_W + "px");
 
+    // Add today's date as a marker, placed by date among the events (latest first)
+    var todayIso = today();
+    var marker = { id: "today", date: todayIso, event: "Today", isToday: true };
+    var at = -1;
+    for (var t = 0; t < list.length; t++) { if ((list[t].date || "") <= todayIso) { at = t; break; } }
+    if (at === -1) list.push(marker); else list.splice(at, 0, marker);
+
     var rows = layoutTimeline(list, boardW);
     var html = "";
     rows.forEach(function (row, r) {
@@ -486,6 +508,13 @@
         row.items.map(function (it) {
           var e = it.e;
           var cx = rev ? boardW - CURVE_Z - ITEM_W / 2 - it.u : CURVE_Z + ITEM_W / 2 + it.u;
+          if (e.isToday) {
+            return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
+              'style="left:' + (cx - ITEM_W / 2) + 'px;--dot:var(--today)">' +
+              '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+              '<span class="tl-dot"></span>' +
+              '<div class="tl-title">Today</div></div>';
+          }
           var color = COLORS[e.category] || "var(--c-others)";
           var label = e.event + ", " + formatDate(e.date) + ", " + e.category + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
           return '<div class="tl-item" role="button" tabindex="0" data-id="' + esc(e.id) + '" ' +
@@ -544,24 +573,24 @@
   }
 
   tlTrack.addEventListener("mouseover", function (ev) {
-    var item = ev.target.closest(".tl-item");
+    var item = ev.target.closest(".tl-item:not(.tl-today)");
     if (item) showTip(item);
   });
   tlTrack.addEventListener("mouseout", hideTip);
   tlTrack.addEventListener("focusin", function (ev) {
-    var item = ev.target.closest(".tl-item");
+    var item = ev.target.closest(".tl-item:not(.tl-today)");
     if (item) showTip(item);
   });
   tlTrack.addEventListener("focusout", hideTip);
   tlTrack.addEventListener("click", function (ev) {
-    var item = ev.target.closest(".tl-item");
+    var item = ev.target.closest(".tl-item:not(.tl-today)");
     if (!item) return;
     hideTip();
     goToEvent(parseInt(item.getAttribute("data-id"), 10));
   });
   tlTrack.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
-    var item = ev.target.closest(".tl-item");
+    var item = ev.target.closest(".tl-item:not(.tl-today)");
     if (!item) return;
     ev.preventDefault();
     goToEvent(parseInt(item.getAttribute("data-id"), 10));
