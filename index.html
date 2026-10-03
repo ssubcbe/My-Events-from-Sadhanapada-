@@ -21,6 +21,7 @@
     --c-sadhanapada: #1f6f6b;
     --c-personal: #7a4a7d;
     --c-isha: #b45f06;
+    --c-meeting: #2f5d9e;
     --c-others: #5b6770;
     --font: "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
@@ -263,10 +264,11 @@
   "use strict";
 
   // ---- Settings: edit the category list here ----
-  var CATEGORIES = ["Sadhanapada Events", "ISHA Program", "Personal", "Others"];
+  var CATEGORIES = ["Sadhanapada Events", "ISHA Program", "Monthly Meeting", "Personal", "Others"];
   var COLORS = {
     "Sadhanapada Events": "var(--c-sadhanapada)",
     "ISHA Program": "var(--c-isha)",
+    "Monthly Meeting": "var(--c-meeting)",
     "Personal": "var(--c-personal)",
     "Others": "var(--c-others)"
   };
@@ -447,7 +449,11 @@
   // Latest event first. Rows run left to right, then right to left,
   // joined by a 180 degree curve at each end.
   function renderTimeline() {
-    var list = chronological().reverse();
+    var cat = els.filter.value;
+    var list = chronological().filter(function (e) { return !cat || e.category === cat; }).reverse();
+    $("tl-empty").textContent = entries.length
+      ? "No events in this category yet."
+      : "Events you add will appear here on a timeline.";
     $("tl-empty").hidden = list.length > 0;
     tlScroll.hidden = list.length === 0;
     hideTip();
@@ -525,6 +531,7 @@
       els.search.value = "";
       els.filter.value = "";
       render();
+      renderTimeline();
       tr = els.rows.querySelector(sel);
     }
     if (!tr) return;
@@ -619,7 +626,7 @@
   });
 
   els.search.addEventListener("input", render);
-  els.filter.addEventListener("change", render);
+  els.filter.addEventListener("change", function () { render(); renderTimeline(); });
 
   // ---- Export / import ----
   function download(name, text, type) {
