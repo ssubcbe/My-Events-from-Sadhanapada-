@@ -19,6 +19,7 @@
     --danger: #a63d2f;
     --c-sadhanapada: #1f6f6b;
     --c-personal: #7a4a7d;
+    --c-isha: #b45f06;
     --c-others: #5b6770;
     --font: "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
@@ -101,6 +102,48 @@
   .empty { padding: 36px 20px; text-align: center; color: var(--muted); }
   tr.editing td { background: #eaf4f3; }
 
+  /* Timeline */
+  .timeline { margin-bottom: 20px; }
+  .tl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 18px; }
+  .tl-head h2 { margin: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.82rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); }
+  .tl-hint { margin: 4px 0 8px; font-size: 0.85rem; color: var(--muted); }
+  .tl-scroll { overflow-x: auto; padding: 6px 0 8px; }
+  .tl-track { list-style: none; margin: 0; padding: 0; display: flex; min-width: max-content; }
+  .tl-item { position: relative; flex: 0 0 156px; width: 156px; padding: 0 10px; text-align: center; outline: none; cursor: default; }
+  .tl-date { font-size: 0.78rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+  .tl-rail { position: relative; height: 18px; margin: 0 -10px; }
+  .tl-rail::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 2px; background: #b9c4c3; }
+  .tl-item:first-child .tl-rail::before { left: 50%; }
+  .tl-item:last-child .tl-rail::before { right: 50%; }
+  .tl-dot {
+    position: absolute; left: 50%; top: 0; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--dot); border: 3px solid #fff; box-shadow: 0 0 0 1.5px var(--dot);
+    transform: translateX(-50%); transition: transform .15s ease;
+  }
+  .tl-item:hover .tl-dot, .tl-item:focus-visible .tl-dot, .tl-item.active .tl-dot { transform: translateX(-50%) scale(1.3); }
+  .tl-title {
+    margin-top: 10px; font-size: 0.9rem; font-weight: 600; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .tl-item:hover .tl-title, .tl-item:focus-visible .tl-title, .tl-item.active .tl-title { color: var(--accent); }
+  .tl-item:focus-visible { outline: 3px solid #8fc9c4; outline-offset: 2px; border-radius: 6px; }
+  .tip {
+    position: fixed; top: 0; left: 0; z-index: 100; max-width: 320px;
+    background: #1c2a2a; color: #fff; border-radius: 8px; padding: 12px 14px;
+    font-size: 0.85rem; line-height: 1.5; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    pointer-events: none; visibility: hidden; opacity: 0; transition: opacity .12s ease;
+  }
+  .tip.show { visibility: visible; opacity: 1; }
+  .tip-meta { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: #c7d3d2; margin-bottom: 4px; }
+  .tip-meta::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); flex: none; }
+  .tip-title { font-weight: 600; margin-bottom: 6px; }
+  .tip-notes { color: #e6eceb; white-space: pre-wrap; }
+  .tip-notes.none { color: #9fb0af; font-style: italic; }
+
   .data-tools { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
 
@@ -114,6 +157,16 @@
 <div class="wrap">
   <h1>Event Log</h1>
   <p class="sub">Record events with a date, category and notes.</p>
+
+  <section class="panel timeline" aria-labelledby="tl-title">
+    <div class="tl-head">
+      <h2 id="tl-title">Timeline</h2>
+      <div class="legend" id="legend" aria-hidden="true"></div>
+    </div>
+    <p class="tl-hint">Hover over an event (or tap it on a phone) to read its notes.</p>
+    <div class="tl-scroll" id="tl-scroll"><ol class="tl-track" id="tl-track"></ol></div>
+    <div class="empty" id="tl-empty" hidden>Events you add will appear here on a timeline.</div>
+  </section>
 
   <section class="panel">
     <h2 id="form-title">Add an event</h2>
@@ -167,17 +220,21 @@
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
 </div>
 
+<div id="tip" class="tip" role="tooltip"></div>
+
 <script>
 (function () {
   "use strict";
 
   // ---- Settings: edit the category list here ----
-  var CATEGORIES = ["Sadhanapada Program", "Personal", "Others"];
+  var CATEGORIES = ["Sadhanapada Events", "ISHA Program", "Personal", "Others"];
   var COLORS = {
-    "Sadhanapada Program": "var(--c-sadhanapada)",
+    "Sadhanapada Events": "var(--c-sadhanapada)",
+    "ISHA Program": "var(--c-isha)",
     "Personal": "var(--c-personal)",
     "Others": "var(--c-others)"
   };
+  var RENAMED = { "Sadhanapada Program": "Sadhanapada Events" };
   var STORAGE_KEY = "event-log-v1";
 
   var $ = function (id) { return document.getElementById(id); };
@@ -200,6 +257,7 @@
       // Older saves used "no" as the identifier; keep it as the internal id
       return data.map(function (e, i) {
         if (e.id == null) e.id = e.no != null ? e.no : i + 1;
+        if (RENAMED[e.category]) e.category = RENAMED[e.category];
         return e;
       });
     } catch (e) { return []; }
@@ -210,6 +268,7 @@
     } catch (e) {
       showMsg("Could not save in this browser. Download a backup to keep your data.");
     }
+    renderTimeline();
   }
 
   // ---- Helpers ----
@@ -291,6 +350,83 @@
     els.empty.textContent = entries.length ? "No events match your search or filter." : "No events yet. Add your first one above.";
     els.count.textContent = list.length + (list.length === 1 ? " event" : " events");
   }
+
+  // ---- Timeline ----
+  var tip = $("tip");
+  var tlTrack = $("tl-track");
+  var tlScroll = $("tl-scroll");
+
+  $("legend").innerHTML = CATEGORIES.map(function (c) {
+    return '<span style="--dot:' + COLORS[c] + '">' + esc(c) + "</span>";
+  }).join("");
+
+  function excerpt(text, maxWords) {
+    var words = String(text || "").trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return "";
+    return words.length > maxWords ? words.slice(0, maxWords).join(" ") + "\u2026" : words.join(" ");
+  }
+
+  function renderTimeline() {
+    var asc = chronological();
+    $("tl-empty").hidden = asc.length > 0;
+    tlScroll.hidden = asc.length === 0;
+    hideTip();
+    tlTrack.innerHTML = asc.map(function (e) {
+      var color = COLORS[e.category] || "var(--c-others)";
+      var label = e.event + ", " + formatDate(e.date) + ", " + e.category + ". " + (excerpt(e.notes, 50) || "No notes.");
+      return '<li class="tl-item" tabindex="0" data-id="' + esc(e.id) + '" style="--dot:' + color + '" aria-label="' + esc(label) + '">' +
+        '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+        '<div class="tl-rail"><span class="tl-dot"></span></div>' +
+        '<div class="tl-title">' + esc(e.event) + "</div></li>";
+    }).join("");
+    tlScroll.scrollLeft = tlScroll.scrollWidth; // show the newest events first
+  }
+
+  function showTip(item) {
+    var id = parseInt(item.getAttribute("data-id"), 10);
+    var e = entries.filter(function (x) { return x.id === id; })[0];
+    if (!e) return;
+    var notes = excerpt(e.notes, 50);
+    tip.style.setProperty("--dot", COLORS[e.category] || "var(--c-others)");
+    tip.innerHTML =
+      '<div class="tip-meta">' + esc(formatDate(e.date)) + " \u00b7 " + esc(e.category) + "</div>" +
+      '<div class="tip-title">' + esc(e.event) + "</div>" +
+      '<div class="tip-notes' + (notes ? "" : " none") + '">' + (notes ? esc(notes) : "No notes added.") + "</div>";
+    var r = item.getBoundingClientRect();
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    var top = r.top - h - 8;
+    if (top < 8) top = r.bottom + 8;
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8));
+    tip.style.top = top + "px";
+    tip.style.left = left + "px";
+    tip.classList.add("show");
+    Array.prototype.forEach.call(tlTrack.children, function (li) { li.classList.toggle("active", li === item); });
+  }
+  function hideTip() {
+    tip.classList.remove("show");
+    Array.prototype.forEach.call(tlTrack.children, function (li) { li.classList.remove("active"); });
+  }
+
+  tlTrack.addEventListener("mouseover", function (ev) {
+    var item = ev.target.closest(".tl-item");
+    if (item) showTip(item);
+  });
+  tlTrack.addEventListener("mouseout", hideTip);
+  tlTrack.addEventListener("focusin", function (ev) {
+    var item = ev.target.closest(".tl-item");
+    if (item) showTip(item);
+  });
+  tlTrack.addEventListener("focusout", hideTip);
+  tlTrack.addEventListener("click", function (ev) {
+    var item = ev.target.closest(".tl-item");
+    if (item) showTip(item);
+  });
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest(".tl-item")) hideTip();
+  });
+  tlScroll.addEventListener("scroll", hideTip);
+  window.addEventListener("scroll", hideTip, { passive: true });
+  window.addEventListener("resize", hideTip);
 
   // ---- Events ----
   els.form.addEventListener("submit", function (ev) {
@@ -389,7 +525,7 @@
             id: id,
             date: String(e.date || ""),
             event: String(e.event),
-            category: CATEGORIES.indexOf(e.category) !== -1 ? e.category : "Others",
+            category: CATEGORIES.indexOf(RENAMED[e.category] || e.category) !== -1 ? (RENAMED[e.category] || e.category) : "Others",
             notes: String(e.notes || "")
           };
         });
@@ -409,6 +545,7 @@
   // ---- Start ----
   resetForm();
   render();
+  renderTimeline();
 })();
 </script>
 </body>
