@@ -42,7 +42,7 @@
   }
   .panel h2 { font-size: 1.05rem; margin: 0 0 14px; font-weight: 600; }
 
-  form { display: grid; grid-template-columns: 90px 170px 1fr 220px; gap: 14px; }
+  form { display: grid; grid-template-columns: 170px 1fr 220px; gap: 14px; }
   .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .field.notes { grid-column: 1 / -1; }
   label { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
@@ -105,8 +105,7 @@
   .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
 
   @media (max-width: 760px) {
-    form { grid-template-columns: 1fr 1fr; }
-    .field.event, .field.category { grid-column: 1 / -1; }
+    form { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -119,10 +118,6 @@
   <section class="panel">
     <h2 id="form-title">Add an event</h2>
     <form id="form" autocomplete="off">
-      <div class="field">
-        <label for="no">No</label>
-        <input id="no" type="number" min="1" step="1" required>
-      </div>
       <div class="field">
         <label for="date">Date</label>
         <input id="date" type="date" required>
@@ -187,21 +182,26 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var els = {
-    form: $("form"), no: $("no"), date: $("date"), event: $("event"),
+    form: $("form"), date: $("date"), event: $("event"),
     category: $("category"), notes: $("notes"), save: $("save"), cancel: $("cancel"),
     msg: $("msg"), title: $("form-title"), rows: $("rows"), empty: $("empty"),
     search: $("search"), filter: $("filter"), count: $("count")
   };
 
   var entries = load();
-  var editingNo = null;
+  var editingId = null;
 
   // ---- Storage ----
   function load() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       var data = raw ? JSON.parse(raw) : [];
-      return Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) return [];
+      // Older saves used "no" as the identifier; keep it as the internal id
+      return data.map(function (e, i) {
+        if (e.id == null) e.id = e.no != null ? e.no : i + 1;
+        return e;
+      });
     } catch (e) { return []; }
   }
   function persist() {
@@ -229,8 +229,14 @@
     var d = new Date(+p[0], +p[1] - 1, +p[2]);
     return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   }
-  function nextNo() {
-    return entries.reduce(function (m, e) { return Math.max(m, +e.no || 0); }, 0) + 1;
+  function nextId() {
+    return entries.reduce(function (m, e) { return Math.max(m, +e.id || 0); }, 0) + 1;
+  }
+  // Oldest to newest; same-date events keep the order they were added
+  function chronological() {
+    return entries.slice().sort(function (a, b) {
+      return (a.date || "").localeCompare(b.date || "") || a.id - b.id;
+    });
   }
   function showMsg(t) { els.msg.textContent = t || ""; }
 
@@ -244,9 +250,8 @@
   });
 
   function resetForm() {
-    editingNo = null;
+    editingId = null;
     els.form.reset();
-    els.no.value = nextNo();
     els.date.value = today();
     els.save.textContent = "Add event";
     els.title.textContent = "Add an event";
@@ -258,25 +263,27 @@
   function render() {
     var q = els.search.value.trim().toLowerCase();
     var cat = els.filter.value;
-    var list = entries.filter(function (e) {
+    var asc = chronological();
+    var serial = {};
+    asc.forEach(function (e, i) { serial[e.id] = i + 1; });
+    // Latest date on top; the serial number stays tied to chronological order
+    var list = asc.filter(function (e) {
       if (cat && e.category !== cat) return false;
       if (!q) return true;
       return (e.event + " " + e.notes).toLowerCase().indexOf(q) !== -1;
-    }).sort(function (a, b) {
-      return (b.date || "").localeCompare(a.date || "") || b.no - a.no;
-    });
+    }).reverse();
 
     els.rows.innerHTML = list.map(function (e) {
       var color = COLORS[e.category] || "var(--c-others)";
-      return '<tr class="' + (e.no === editingNo ? "editing" : "") + '">' +
-        '<td class="no">' + esc(e.no) + "</td>" +
+      return '<tr class="' + (e.id === editingId ? "editing" : "") + '">' +
+        '<td class="no">' + serial[e.id] + "</td>" +
         '<td class="date">' + esc(formatDate(e.date)) + "</td>" +
         "<td>" + esc(e.event) + "</td>" +
         '<td><span class="tag" style="--dot:' + color + '">' + esc(e.category) + "</span></td>" +
         '<td class="notes">' + esc(e.notes) + "</td>" +
         '<td class="row-actions">' +
-          '<button class="ghost small" data-act="edit" data-no="' + esc(e.no) + '">Edit</button>' +
-          '<button class="danger small" data-act="del" data-no="' + esc(e.no) + '">Delete</button>' +
+          '<button class="ghost small" data-act="edit" data-id="' + esc(e.id) + '">Edit</button>' +
+          '<button class="danger small" data-act="del" data-id="' + esc(e.id) + '">Delete</button>' +
         "</td></tr>";
     }).join("");
 
@@ -288,21 +295,17 @@
   // ---- Events ----
   els.form.addEventListener("submit", function (ev) {
     ev.preventDefault();
-    var no = parseInt(els.no.value, 10);
     var entry = {
-      no: no,
+      id: editingId !== null ? editingId : nextId(),
       date: els.date.value,
       event: els.event.value.trim(),
       category: els.category.value,
       notes: els.notes.value.trim()
     };
-    if (!no || no < 1) { showMsg("Enter a number of 1 or more."); return; }
     if (!entry.event) { showMsg("Enter the event."); return; }
-    var clash = entries.some(function (e) { return e.no === no && e.no !== editingNo; });
-    if (clash) { showMsg("No " + no + " is already used. Choose a different number."); return; }
 
-    if (editingNo !== null) {
-      entries = entries.map(function (e) { return e.no === editingNo ? entry : e; });
+    if (editingId !== null) {
+      entries = entries.map(function (e) { return e.id === editingId ? entry : e; });
     } else {
       entries.push(entry);
     }
@@ -316,26 +319,25 @@
   els.rows.addEventListener("click", function (ev) {
     var btn = ev.target.closest("button[data-act]");
     if (!btn) return;
-    var no = parseInt(btn.getAttribute("data-no"), 10);
-    var entry = entries.filter(function (e) { return e.no === no; })[0];
+    var id = parseInt(btn.getAttribute("data-id"), 10);
+    var entry = entries.filter(function (e) { return e.id === id; })[0];
     if (!entry) return;
     if (btn.getAttribute("data-act") === "edit") {
-      editingNo = no;
-      els.no.value = entry.no;
+      editingId = id;
       els.date.value = entry.date;
       els.event.value = entry.event;
       els.category.value = entry.category;
       els.notes.value = entry.notes;
       els.save.textContent = "Save changes";
-      els.title.textContent = "Edit event " + no;
+      els.title.textContent = "Edit event";
       els.cancel.hidden = false;
       showMsg("");
       render();
       els.form.scrollIntoView({ behavior: "smooth", block: "start" });
       els.event.focus();
-    } else if (confirm('Are you sure you want to delete event ' + no + ' "' + entry.event + '"?\n\nThis cannot be undone.')) {
-      entries = entries.filter(function (e) { return e.no !== no; });
-      if (editingNo === no) resetForm();
+    } else if (confirm('Are you sure you want to delete "' + entry.event + '"?\n\nThis cannot be undone.')) {
+      entries = entries.filter(function (e) { return e.id !== id; });
+      if (editingId === id) resetForm();
       persist();
       render();
     }
@@ -360,9 +362,9 @@
     return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
   $("export-csv").addEventListener("click", function () {
-    var sorted = entries.slice().sort(function (a, b) { return a.no - b.no; });
-    var lines = ["No,Date,Event,Category,Notes"].concat(sorted.map(function (e) {
-      return [e.no, e.date, e.event, e.category, e.notes].map(csvCell).join(",");
+    var sorted = chronological();
+    var lines = ["No,Date,Event,Category,Notes"].concat(sorted.map(function (e, i) {
+      return [i + 1, e.date, e.event, e.category, e.notes].map(csvCell).join(",");
     }));
     download("event-log-" + today() + ".csv", "\ufeff" + lines.join("\r\n"), "text/csv;charset=utf-8");
   });
@@ -378,9 +380,13 @@
       try {
         var data = JSON.parse(reader.result);
         if (!Array.isArray(data)) throw new Error("bad");
-        var clean = data.filter(function (e) { return e && e.no && e.event; }).map(function (e) {
+        var used = {};
+        var clean = data.filter(function (e) { return e && e.event; }).map(function (e, i) {
+          var id = parseInt(e.id != null ? e.id : e.no, 10);
+          if (!id || used[id]) { id = 1000000 + i; }
+          used[id] = true;
           return {
-            no: parseInt(e.no, 10),
+            id: id,
             date: String(e.date || ""),
             event: String(e.event),
             category: CATEGORIES.indexOf(e.category) !== -1 ? e.category : "Others",
