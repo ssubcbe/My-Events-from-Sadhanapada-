@@ -18,11 +18,11 @@
     --accent: #1f6f6b;
     --accent-ink: #ffffff;
     --danger: #a63d2f;
-    --c-sadhanapada: #1f6f6b;
-    --c-personal: #7a4a7d;
-    --c-isha: #b45f06;
-    --c-meeting: #2f5d9e;
-    --c-others: #5b6770;
+    --c-sadhanapada: #0072B2;
+    --c-personal: #9B2C8F;
+    --c-isha: #D55E00;
+    --c-meeting: #00855F;
+    --c-others: #2B2B2B;
     --font: "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -124,7 +124,7 @@
   .tl-scroll { overflow-x: auto; padding: 4px 0 6px; }
 
   .tl-board {
-    --track: #E87524;
+    --track: #E4DED4;
     --line: calc(12px - 2pt);                  /* track thickness = inner circle diameter */
     --p: 84px;                                 /* distance between two rows */
     --z: calc((var(--p) + var(--line)) / 2);   /* radius of the 180 degree turn */
@@ -255,6 +255,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
+  <p class="hint">Version: 3 Oct 2026 b (new colours, All Category filter)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -341,7 +342,7 @@
   CATEGORIES.forEach(function (c) {
     els.category.insertAdjacentHTML("beforeend", '<option value="' + esc(c) + '">' + esc(c) + "</option>");
   });
-  els.filter.insertAdjacentHTML("beforeend", '<option value="">All categories</option>');
+  els.filter.insertAdjacentHTML("beforeend", '<option value="">All Category</option>');
   CATEGORIES.forEach(function (c) {
     els.filter.insertAdjacentHTML("beforeend", '<option value="' + esc(c) + '">' + esc(c) + "</option>");
   });
