@@ -157,12 +157,11 @@
   }
   .tl-curve {
     position: absolute; z-index: 0; top: var(--rail-top);
-    width: var(--z); height: calc(var(--p) / 2 + var(--line));
+    width: var(--z); height: calc(var(--p) + var(--line));
     border: var(--line) solid var(--track);
   }
   .tl-curve.right { right: 0; border-left: 0; border-radius: 0 var(--z) var(--z) 0; }
-  .tl-curve.left  { left: 0; top: calc(var(--rail-top) + var(--p) / 2); border-right: 0; border-radius: var(--z) 0 0 var(--z); }
-  .tl-lane { position: absolute; z-index: 0; top: calc(var(--rail-top) + var(--p) / 2); height: var(--line); background: var(--track); }
+  .tl-curve.left  { left: 0; border-right: 0; border-radius: var(--z) 0 0 var(--z); }
   .tl-item {
     position: absolute; top: 0; z-index: 1; width: var(--item); height: var(--p);
     text-align: center; cursor: pointer; outline: none;
@@ -302,7 +301,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
-  <p class="hint">Version: 3 Oct 2026 h (monthly view, no blank rows)</p>
+  <p class="hint">Version: 3 Oct 2026 i (blank lines removed, rows joined by curves)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -472,10 +471,11 @@
 
   // Layout constants (kept in one place and passed to the CSS)
   var LINE = 12 - 2 * (96 / 72);          // track thickness: 12px reduced by 2pt
-  var ROW_P = 72 * 1.2 * 2;                // rail to next rail: each line-to-line gap is 72px + 20%
+  var ROW_P = 72 * 1.2;                    // gap between two timelines: 72px + 20%
   var ITEM_W = 96;                         // width reserved for one event label
   var MIN_GAP = ITEM_W;                    // closest two events can sit without labels touching
-  var CURVE_Z = (ROW_P / 2 + LINE) / 2;    // radius of each 180 degree turn
+  var CURVE_Z = (ROW_P + LINE) / 2;        // radius of the 180 degree turn
+  var CROSS = ITEM_W + Math.PI * ROW_P / 2; // track length used up by one turn
   var MAX_PX_PER_DAY = 14;
   var VIEW_KEY = "event-log-view";
   var viewMode = "existing";
@@ -488,8 +488,8 @@
 
   // Place events (oldest first) from left to right. The distance between two
   // events is proportional to the days between them, never less than MIN_GAP.
-  // When a row is full the track turns back along a return lane and starts the
-  // next row again at the left.
+  // When a row is full the track makes a 180 degree turn straight into the next
+  // row, which runs back the other way (no empty lines in between).
   function layoutTimeline(list, boardW) {
     var span = Math.max(ITEM_W, boardW - 2 * CURVE_Z - ITEM_W); // usable length of one row
     var days = list.map(function (e) { return dayNumber(e.date); });
@@ -502,7 +502,7 @@
       if (rows[cur].items.length < PER_ROW && u + g <= span) {
         u += g;
       } else {
-        var left = g - (span - u);              // distance still to travel after the row ends
+        var left = g - (span - u) - CROSS;      // distance still to travel after the turn
         cur++; rows[cur] = { items: [] };       // every row gets at least one event, so no blank timeline
         u = Math.min(Math.max(0, left), span);
       }
@@ -620,11 +620,14 @@
     var rows = layoutTimeline(list, boardW);
     var html = "";
     rows.forEach(function (row, r) {
+      var rev = r % 2 === 1;                                   // odd rows run right to left
       var last = r === rows.length - 1;
-      var leftCap = r === 0, rightCap = last;
-      var barL = r === 0 ? 10 : CURVE_Z, barR = boardW - CURVE_Z;            // full row by default
+      var leftCap = r === 0 || (last && rev), rightCap = last && !rev;
+      var barL = r === 0 ? 10 : CURVE_Z, barR = boardW - CURVE_Z;   // full row by default
       if (last && row.items.length) {                          // last row stops just past its final event
-        barR = Math.min(boardW - CURVE_Z, CURVE_Z + ITEM_W + row.items[row.items.length - 1].u);
+        var lastU = row.items[row.items.length - 1].u;
+        if (rev) barL = Math.max(CURVE_Z, boardW - CURVE_Z - ITEM_W - lastU);
+        else barR = Math.min(boardW - CURVE_Z, CURVE_Z + ITEM_W + lastU);
       }
       var rad = (leftCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (leftCap ? "6px" : "0");
       html += '<div class="tl-row">' +
@@ -634,11 +637,11 @@
           '<line x1="10" y1="1.5" x2="10" y2="27" stroke="#1c2a2a" stroke-width="2.6" stroke-linecap="round"/></svg>' +
           "<span>Start</span></div>" : "") +
         '<div class="tl-bar" style="left:' + barL + "px;width:" + (barR - barL) + "px;border-radius:" + rad + '"></div>' +
-        (last ? "" :
-          '<div class="tl-curve right"></div>' +
-          '<div class="tl-lane" style="left:' + CURVE_Z + "px;width:" + (boardW - 2 * CURVE_Z) + 'px"></div>' +
-          '<div class="tl-curve left"></div>') +
-        row.items.map(function (it) { return itemMarkup(it.e, CURVE_Z + ITEM_W / 2 + it.u); }).join("") +
+        (last ? "" : '<div class="tl-curve ' + (rev ? "left" : "right") + '"></div>') +
+        row.items.map(function (it) {
+          var cx = rev ? boardW - CURVE_Z - ITEM_W / 2 - it.u : CURVE_Z + ITEM_W / 2 + it.u;
+          return itemMarkup(it.e, cx);
+        }).join("") +
         "</div>";
     });
     tlTrack.innerHTML = html;
