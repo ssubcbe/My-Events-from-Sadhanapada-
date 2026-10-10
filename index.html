@@ -122,7 +122,7 @@
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.82rem; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); }
-  .tl-hint { margin: 0 0 28px; font-size: 0.85rem; color: var(--muted); }
+  .tl-hint { margin: 0; flex: 1 1 320px; font-size: 0.85rem; color: var(--muted); }
   .tl-scroll { overflow-x: auto; padding: 4px 0 6px; }
 
   .tl-board {
@@ -135,6 +135,20 @@
   }
   .tl-row { position: relative; height: var(--p); }
   .tl-bar { position: absolute; z-index: 0; top: var(--rail-top); height: var(--line); background: var(--track); border-radius: 999px; }
+  .tl-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; margin-bottom: 28px; }
+  .view-toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--muted); }
+  .vt-label { cursor: pointer; user-select: none; }
+  .vt-label.active { color: var(--ink); font-weight: 600; }
+  .switch { position: relative; width: 46px; height: 26px; padding: 0; border-radius: 999px; border: 1px solid #8fa09f; background: #c9d3d2; }
+  .switch .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s ease; }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-checked="true"] .knob { transform: translateX(20px); }
+  .tl-board.monthly { min-width: 0; }
+  .tl-month + .tl-month { margin-top: 10px; }
+  .tl-month-title { margin: 0 0 6px; font-size: 0.9rem; font-weight: 700; display: flex; align-items: baseline; gap: 10px; }
+  .tl-month-title span { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+  .tl-month-scroll { overflow-x: auto; padding-bottom: 2px; }
+  .tl-mrow { --p: 62px; }
   .tl-flag { position: absolute; left: 0; top: 0; z-index: 2; width: 48px; pointer-events: none; }
   .tl-flag svg { display: block; }
   .tl-flag span {
@@ -221,7 +235,14 @@
       <h2 id="tl-title">Timeline</h2>
       <div class="legend" id="legend" aria-hidden="true"></div>
     </div>
-    <p class="tl-hint">Oldest event on the left, latest on the right. Hover over an event to read its notes, or click it to jump to it in the list below.</p>
+    <div class="tl-controls">
+      <p class="tl-hint" id="tl-hint"></p>
+      <div class="view-toggle" role="group" aria-label="Timeline view">
+        <span class="vt-label active" id="vt-existing">Existing view</span>
+        <button type="button" class="switch" id="view-switch" role="switch" aria-checked="false" aria-label="Show monthly view"><span class="knob"></span></button>
+        <span class="vt-label" id="vt-monthly">Monthly view</span>
+      </div>
+    </div>
     <div class="tl-scroll" id="tl-scroll"><div class="tl-board" id="tl-track"></div></div>
     <div class="empty" id="tl-empty" hidden>Events you add will appear here on a timeline.</div>
   </section>
@@ -281,7 +302,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
-  <p class="hint">Version: 3 Oct 2026 g (start flag, wider gap between timelines)</p>
+  <p class="hint">Version: 3 Oct 2026 h (monthly view, no blank rows)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -456,6 +477,9 @@
   var MIN_GAP = ITEM_W;                    // closest two events can sit without labels touching
   var CURVE_Z = (ROW_P / 2 + LINE) / 2;    // radius of each 180 degree turn
   var MAX_PX_PER_DAY = 14;
+  var VIEW_KEY = "event-log-view";
+  var viewMode = "existing";
+  try { if (localStorage.getItem(VIEW_KEY) === "monthly") viewMode = "monthly"; } catch (err) {}
 
   function dayNumber(iso) {
     var p = String(iso || "").split("-");
@@ -479,13 +503,86 @@
         u += g;
       } else {
         var left = g - (span - u);              // distance still to travel after the row ends
-        cur++; rows[cur] = { items: [] };
-        while (left > span) { left -= span; cur++; rows[cur] = { items: [] }; }
-        u = Math.max(0, left);
+        cur++; rows[cur] = { items: [] };       // every row gets at least one event, so no blank timeline
+        u = Math.min(Math.max(0, left), span);
       }
       rows[cur].items.push({ e: list[i], u: u });
     }
     return rows;
+  }
+
+  function itemMarkup(e, cx) {
+    var left = cx - ITEM_W / 2;
+    if (e.isToday) {
+      return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
+        'style="left:' + left + 'px;--dot:var(--today)">' +
+        '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+        '<span class="tl-dot"></span>' +
+        '<div class="tl-title">Today</div></div>';
+    }
+    var color = COLORS[e.category] || "var(--c-others)";
+    var label = e.event + ", " + formatDate(e.date) + ", " + e.category + (e.location ? ", " + e.location : "") + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
+    return '<div class="tl-item" role="button" tabindex="0" data-id="' + esc(e.id) + '" ' +
+      'style="left:' + left + "px;--dot:" + color + '" aria-label="' + esc(label) + '">' +
+      '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+      '<span class="tl-dot"></span>' +
+      '<div class="tl-title">' + esc(e.event) + "</div></div>";
+  }
+
+  // Monthly view: one single-row timeline per month holding all of that month's
+  // events, placed by day of the month. Months without events are skipped.
+  var MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"];
+
+  function renderMonthly(list) {
+    var boardW = Math.max(320, tlScroll.clientWidth);
+    tlTrack.style.width = "";
+    tlTrack.style.setProperty("--line", LINE + "px");
+    tlTrack.style.setProperty("--item", ITEM_W + "px");
+
+    var todayIso = today(), todayKey = todayIso.slice(0, 7);
+    var groups = {}, keys = [];
+    list.forEach(function (e) {
+      var k = String(e.date || "").slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(k)) return;
+      if (!groups[k]) { groups[k] = []; keys.push(k); }
+      groups[k].push(e);
+    });
+    if (!groups[todayKey]) { groups[todayKey] = []; keys.push(todayKey); }
+    keys.sort();
+
+    var html = "";
+    keys.forEach(function (k) {
+      var items = groups[k].slice();
+      var count = items.length;
+      if (k === todayKey) {
+        var marker = { id: "today", date: todayIso, event: "Today", isToday: true };
+        var at = -1;
+        for (var t = 0; t < items.length; t++) { if ((items[t].date || "") > todayIso) { at = t; break; } }
+        if (at === -1) items.push(marker); else items.splice(at, 0, marker);
+      }
+      var y = +k.slice(0, 4), m = +k.slice(5, 7);
+      var dim = new Date(y, m, 0).getDate();
+      var padX = ITEM_W / 2 + 12;
+      var inner = Math.max(0, boardW - 2 * padX);
+      var prev = -Infinity;
+      var xs = items.map(function (e) {
+        var d = parseInt(String(e.date).slice(8, 10), 10) || 1;
+        var x = padX + (dim > 1 ? (d - 1) / (dim - 1) : 0) * inner;
+        x = Math.max(x, prev + MIN_GAP);       // keep labels from touching
+        prev = x;
+        return x;
+      });
+      var rowW = Math.max(boardW, prev + padX);
+      html += '<section class="tl-month">' +
+        '<h3 class="tl-month-title">' + MONTH_NAMES[m - 1] + " " + y + "<span>" +
+          (count ? count + (count === 1 ? " event" : " events") : "no events yet") + "</span></h3>" +
+        '<div class="tl-month-scroll"><div class="tl-row tl-mrow" style="width:' + rowW + 'px">' +
+        '<div class="tl-bar" style="left:8px;width:' + (rowW - 16) + 'px;border-radius:6px"></div>' +
+        items.map(function (e, i) { return itemMarkup(e, xs[i]); }).join("") +
+        "</div></div></section>";
+    });
+    tlTrack.innerHTML = html;
   }
 
   // Oldest event on the left, newest on the right. Every row reads left to
@@ -502,6 +599,9 @@
     tlScroll.hidden = list.length === 0;
     hideTip();
     if (!list.length) { tlTrack.innerHTML = ""; return; }
+
+    tlTrack.classList.toggle("monthly", viewMode === "monthly");
+    if (viewMode === "monthly") { renderMonthly(list); return; }
 
     var boardW = Math.max(760, tlScroll.clientWidth);
     tlTrack.style.width = boardW + "px";
@@ -538,24 +638,7 @@
           '<div class="tl-curve right"></div>' +
           '<div class="tl-lane" style="left:' + CURVE_Z + "px;width:" + (boardW - 2 * CURVE_Z) + 'px"></div>' +
           '<div class="tl-curve left"></div>') +
-        row.items.map(function (it) {
-          var e = it.e;
-          var cx = CURVE_Z + ITEM_W / 2 + it.u;
-          if (e.isToday) {
-            return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
-              'style="left:' + (cx - ITEM_W / 2) + 'px;--dot:var(--today)">' +
-              '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
-              '<span class="tl-dot"></span>' +
-              '<div class="tl-title">Today</div></div>';
-          }
-          var color = COLORS[e.category] || "var(--c-others)";
-          var label = e.event + ", " + formatDate(e.date) + ", " + e.category + (e.location ? ", " + e.location : "") + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
-          return '<div class="tl-item" role="button" tabindex="0" data-id="' + esc(e.id) + '" ' +
-            'style="left:' + (cx - ITEM_W / 2) + "px;--dot:" + color + '" aria-label="' + esc(label) + '">' +
-            '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
-            '<span class="tl-dot"></span>' +
-            '<div class="tl-title">' + esc(e.event) + "</div></div>";
-        }).join("") +
+        row.items.map(function (it) { return itemMarkup(it.e, CURVE_Z + ITEM_W / 2 + it.u); }).join("") +
         "</div>";
     });
     tlTrack.innerHTML = html;
@@ -637,6 +720,28 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(renderTimeline, 150);
   });
+
+  // ---- View switch: existing view / monthly view ----
+  var viewSwitch = $("view-switch");
+  var HINT_EXISTING = "Oldest event on the left, latest on the right. Hover over an event to read its notes, or click it to jump to it in the list below.";
+  var HINT_MONTHLY = "One timeline per month with all of that month\u2019s events. Hover over an event to read its notes, or click it to jump to it in the list below.";
+  function applyView() {
+    var monthly = viewMode === "monthly";
+    viewSwitch.setAttribute("aria-checked", monthly ? "true" : "false");
+    $("vt-existing").classList.toggle("active", !monthly);
+    $("vt-monthly").classList.toggle("active", monthly);
+    $("tl-hint").textContent = monthly ? HINT_MONTHLY : HINT_EXISTING;
+  }
+  function setView(mode) {
+    viewMode = mode;
+    try { localStorage.setItem(VIEW_KEY, mode); } catch (err) {}
+    applyView();
+    renderTimeline();
+  }
+  viewSwitch.addEventListener("click", function () { setView(viewMode === "monthly" ? "existing" : "monthly"); });
+  $("vt-existing").addEventListener("click", function () { setView("existing"); });
+  $("vt-monthly").addEventListener("click", function () { setView("monthly"); });
+  applyView();
 
   // ---- Events ----
   els.form.addEventListener("submit", function (ev) {
