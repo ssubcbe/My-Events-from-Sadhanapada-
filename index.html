@@ -53,7 +53,7 @@
     border-radius: 10px 10px 0 0;
   }
 
-  form { display: grid; grid-template-columns: 170px 1fr 220px; gap: 14px; }
+  form { display: grid; grid-template-columns: 170px 1fr 230px 200px; gap: 14px; }
   .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .field.notes { grid-column: 1 / -1; }
   label { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
@@ -101,6 +101,7 @@
   td { font-size: calc(1rem - 2pt); }
   td.no { width: 56px; color: var(--muted); font-variant-numeric: tabular-nums; }
   td.date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.none { color: #9aa6a5; }
   td.notes { color: #364444; white-space: pre-wrap; max-width: 320px; }
   td.row-actions { white-space: nowrap; text-align: right; }
   td.row-actions button { margin-left: 4px; }
@@ -134,6 +135,14 @@
   }
   .tl-row { position: relative; height: var(--p); }
   .tl-bar { position: absolute; z-index: 0; top: var(--rail-top); height: var(--line); background: var(--track); border-radius: 999px; }
+  .tl-curve {
+    position: absolute; z-index: 0; top: var(--rail-top);
+    width: var(--z); height: calc(var(--p) / 2 + var(--line));
+    border: var(--line) solid var(--track);
+  }
+  .tl-curve.right { right: 0; border-left: 0; border-radius: 0 var(--z) var(--z) 0; }
+  .tl-curve.left  { left: 0; top: calc(var(--rail-top) + var(--p) / 2); border-right: 0; border-radius: var(--z) 0 0 var(--z); }
+  .tl-lane { position: absolute; z-index: 0; top: calc(var(--rail-top) + var(--p) / 2); height: var(--line); background: var(--track); }
   .tl-item {
     position: absolute; top: 0; z-index: 1; width: var(--item); height: var(--p);
     text-align: center; cursor: pointer; outline: none;
@@ -226,6 +235,10 @@
         <label for="category">Category</label>
         <select id="category" required></select>
       </div>
+      <div class="field location">
+        <label for="location">Location</label>
+        <select id="location"></select>
+      </div>
       <div class="field notes">
         <label for="notes">Notes</label>
         <textarea id="notes"></textarea>
@@ -241,13 +254,14 @@
   <div class="toolbar">
     <div class="grow"><input type="search" id="search" placeholder="Search events and notes" aria-label="Search events and notes"></div>
     <select id="filter" aria-label="Filter by category"></select>
+    <select id="filter-location" aria-label="Filter by location"></select>
     <span class="count" id="count"></span>
   </div>
 
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>No</th><th>Date</th><th>Event</th><th>Category</th><th>Notes</th><th></th></tr>
+        <tr><th>No</th><th>Date</th><th>Event</th><th>Category</th><th>Location</th><th>Notes</th><th></th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
@@ -261,7 +275,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
-  <p class="hint">Version: 3 Oct 2026 e (timeline: oldest first, left to right)</p>
+  <p class="hint">Version: 3 Oct 2026 f (Location, curves restored, wider row gap)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -279,13 +293,18 @@
     "Personal": "var(--c-personal)",
     "Others": "var(--c-others)"
   };
+  var LOCATIONS = [
+    "Spanda Hall", "Adiyogi Alayam", "Surya Kund", "Vellingiri Prashala", "Chamundi Prashala",
+    "Adiyogi Statue", "Devi Temple", "Dhyanalinga Temple", "Kondrai Stay Area",
+    "Sevanthi Stay Area", "Welcome point"
+  ].sort(function (a, b) { return a.localeCompare(b); });   // ascending order
   var RENAMED = { "Sadhanapada Program": "Sadhanapada Events" };
   var STORAGE_KEY = "event-log-v1";
 
   var $ = function (id) { return document.getElementById(id); };
   var els = {
     form: $("form"), date: $("date"), event: $("event"),
-    category: $("category"), notes: $("notes"), save: $("save"), cancel: $("cancel"),
+    category: $("category"), location: $("location"), locFilter: $("filter-location"), notes: $("notes"), save: $("save"), cancel: $("cancel"),
     msg: $("msg"), title: $("form-title"), rows: $("rows"), empty: $("empty"),
     search: $("search"), filter: $("filter"), count: $("count")
   };
@@ -303,6 +322,7 @@
       return data.map(function (e, i) {
         if (e.id == null) e.id = e.no != null ? e.no : i + 1;
         if (RENAMED[e.category]) e.category = RENAMED[e.category];
+        if (LOCATIONS.indexOf(e.location) === -1) e.location = "";
         return e;
       });
     } catch (e) { return []; }
@@ -348,6 +368,13 @@
   CATEGORIES.forEach(function (c) {
     els.category.insertAdjacentHTML("beforeend", '<option value="' + esc(c) + '">' + esc(c) + "</option>");
   });
+  els.location.insertAdjacentHTML("beforeend", '<option value="">Not specified</option>');
+  els.locFilter.insertAdjacentHTML("beforeend", '<option value="">All Location</option>');
+  LOCATIONS.forEach(function (l) {
+    var opt = '<option value="' + esc(l) + '">' + esc(l) + "</option>";
+    els.location.insertAdjacentHTML("beforeend", opt);
+    els.locFilter.insertAdjacentHTML("beforeend", opt);
+  });
   els.filter.insertAdjacentHTML("beforeend", '<option value="">All Category</option>');
   CATEGORIES.forEach(function (c) {
     els.filter.insertAdjacentHTML("beforeend", '<option value="' + esc(c) + '">' + esc(c) + "</option>");
@@ -366,13 +393,14 @@
   // ---- Render ----
   function render() {
     var q = els.search.value.trim().toLowerCase();
-    var cat = els.filter.value;
+    var cat = els.filter.value, loc = els.locFilter.value;
     var asc = chronological();
     var serial = {};
     asc.forEach(function (e, i) { serial[e.id] = i + 1; });
     // Latest date on top; the serial number stays tied to chronological order
     var list = asc.filter(function (e) {
       if (cat && e.category !== cat) return false;
+      if (loc && e.location !== loc) return false;
       if (!q) return true;
       return (e.event + " " + e.notes).toLowerCase().indexOf(q) !== -1;
     }).reverse();
@@ -384,6 +412,7 @@
         '<td class="date">' + esc(formatDate(e.date)) + "</td>" +
         "<td>" + esc(e.event) + "</td>" +
         '<td><span class="tag" style="--dot:' + color + '">' + esc(e.category) + "</span></td>" +
+        (e.location ? "<td>" + esc(e.location) + "</td>" : '<td class="none">\u2013</td>') +
         '<td class="notes">' + esc(e.notes) + "</td>" +
         '<td class="row-actions">' +
           '<button class="ghost small" data-act="edit" data-id="' + esc(e.id) + '">Edit</button>' +
@@ -392,7 +421,7 @@
     }).join("");
 
     els.empty.hidden = list.length > 0;
-    els.empty.textContent = entries.length ? "No events match your search or filter." : "No events yet. Add your first one above.";
+    els.empty.textContent = entries.length ? "No events match your search or filters." : "No events yet. Add your first one above.";
     els.count.textContent = list.length + (list.length === 1 ? " event" : " events");
   }
 
@@ -416,10 +445,10 @@
 
   // Layout constants (kept in one place and passed to the CSS)
   var LINE = 12 - 2 * (96 / 72);          // track thickness: 12px reduced by 2pt
-  var ROW_P = 72;                          // distance between two rows
+  var ROW_P = 72 * 1.2;                    // distance between two rows (20% more than before)
   var ITEM_W = 96;                         // width reserved for one event label
   var MIN_GAP = ITEM_W;                    // closest two events can sit without labels touching
-  var PAD = 12;                            // space at each end of a row
+  var CURVE_Z = (ROW_P / 2 + LINE) / 2;    // radius of each 180 degree turn
   var MAX_PX_PER_DAY = 14;
 
   function dayNumber(iso) {
@@ -427,24 +456,24 @@
     return p.length === 3 ? Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000 : NaN;
   }
 
-  // Place events (oldest first) along the track. The distance between two
+  // Place events (oldest first) from left to right. The distance between two
   // events is proportional to the days between them, never less than MIN_GAP.
-  // When a row is full the track continues at the left of the next row.
+  // When a row is full the track turns back along a return lane and starts the
+  // next row again at the left.
   function layoutTimeline(list, boardW) {
-    var span = Math.max(ITEM_W, boardW - 2 * PAD - ITEM_W); // usable length of one row
+    var span = Math.max(ITEM_W, boardW - 2 * CURVE_Z - ITEM_W); // usable length of one row
     var days = list.map(function (e) { return dayNumber(e.date); });
     var total = days[days.length - 1] - days[0];
     var k = total > 0 ? Math.min(MAX_PX_PER_DAY, Math.max(2.5, 5 * span / total)) : MAX_PX_PER_DAY;
-    var rows = [{ items: [] }], cur = 0, u = 0;
-    rows[0].items.push({ e: list[0], u: 0 });
+    var rows = [{ items: [{ e: list[0], u: 0 }] }], cur = 0, u = 0;
     for (var i = 1; i < list.length; i++) {
       var dd = days[i] - days[i - 1];
       var g = Math.max(MIN_GAP, (isNaN(dd) ? 0 : dd) * k);
       if (rows[cur].items.length < PER_ROW && u + g <= span) {
         u += g;
       } else {
-        var left = g - (span - u);
-        cur++; rows[cur] = rows[cur] || { items: [] };
+        var left = g - (span - u);              // distance still to travel after the row ends
+        cur++; rows[cur] = { items: [] };
         while (left > span) { left -= span; cur++; rows[cur] = { items: [] }; }
         u = Math.max(0, left);
       }
@@ -453,13 +482,15 @@
     return rows;
   }
 
-  // Oldest event on the left, latest on the right. Every row runs left to right,
-  // with the first event of each row at the left.
+  // Oldest event on the left, newest on the right. Every row reads left to
+  // right; rows are joined by a 180 degree curve, a return lane and another curve.
   function renderTimeline() {
-    var cat = els.filter.value;
-    var list = chronological().filter(function (e) { return !cat || e.category === cat; });
+    var cat = els.filter.value, loc = els.locFilter.value;
+    var list = chronological().filter(function (e) {
+      return (!cat || e.category === cat) && (!loc || e.location === loc);
+    });
     $("tl-empty").textContent = entries.length
-      ? "No events in this category yet."
+      ? "No events match the selected category and location."
       : "Events you add will appear here on a timeline.";
     $("tl-empty").hidden = list.length > 0;
     tlScroll.hidden = list.length === 0;
@@ -471,8 +502,9 @@
     tlTrack.style.setProperty("--line", LINE + "px");
     tlTrack.style.setProperty("--p", ROW_P + "px");
     tlTrack.style.setProperty("--item", ITEM_W + "px");
+    tlTrack.style.setProperty("--z", CURVE_Z + "px");
 
-    // Add today's date as a marker, placed by date among the events (oldest first)
+    // Add today's date as a marker, placed by date among the events
     var todayIso = today();
     var marker = { id: "today", date: todayIso, event: "Today", isToday: true };
     var at = -1;
@@ -483,15 +515,21 @@
     var html = "";
     rows.forEach(function (row, r) {
       var last = r === rows.length - 1;
-      var barL = PAD, barR = boardW - PAD;
-      if (last && row.items.length) {                        // last row stops just past its final event
-        barR = Math.min(barR, PAD + ITEM_W + row.items[row.items.length - 1].u);
+      var leftCap = r === 0, rightCap = last;
+      var barL = CURVE_Z, barR = boardW - CURVE_Z;            // full row by default
+      if (last && row.items.length) {                          // last row stops just past its final event
+        barR = Math.min(boardW - CURVE_Z, CURVE_Z + ITEM_W + row.items[row.items.length - 1].u);
       }
+      var rad = (leftCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (leftCap ? "6px" : "0");
       html += '<div class="tl-row">' +
-        '<div class="tl-bar" style="left:' + barL + "px;width:" + (barR - barL) + 'px"></div>' +
+        '<div class="tl-bar" style="left:' + barL + "px;width:" + (barR - barL) + "px;border-radius:" + rad + '"></div>' +
+        (last ? "" :
+          '<div class="tl-curve right"></div>' +
+          '<div class="tl-lane" style="left:' + CURVE_Z + "px;width:" + (boardW - 2 * CURVE_Z) + 'px"></div>' +
+          '<div class="tl-curve left"></div>') +
         row.items.map(function (it) {
           var e = it.e;
-          var cx = PAD + ITEM_W / 2 + it.u;
+          var cx = CURVE_Z + ITEM_W / 2 + it.u;
           if (e.isToday) {
             return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
               'style="left:' + (cx - ITEM_W / 2) + 'px;--dot:var(--today)">' +
@@ -500,7 +538,7 @@
               '<div class="tl-title">Today</div></div>';
           }
           var color = COLORS[e.category] || "var(--c-others)";
-          var label = e.event + ", " + formatDate(e.date) + ", " + e.category + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
+          var label = e.event + ", " + formatDate(e.date) + ", " + e.category + (e.location ? ", " + e.location : "") + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
           return '<div class="tl-item" role="button" tabindex="0" data-id="' + esc(e.id) + '" ' +
             'style="left:' + (cx - ITEM_W / 2) + "px;--dot:" + color + '" aria-label="' + esc(label) + '">' +
             '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
@@ -519,7 +557,7 @@
     var notes = excerpt(e.notes, 25);
     tip.style.setProperty("--dot", COLORS[e.category] || "var(--c-others)");
     tip.innerHTML =
-      '<div class="tip-meta">' + esc(formatDate(e.date)) + " \u00b7 " + esc(e.category) + "</div>" +
+      '<div class="tip-meta">' + esc(formatDate(e.date)) + " \u00b7 " + esc(e.category) + (e.location ? " \u00b7 " + esc(e.location) : "") + "</div>" +
       '<div class="tip-title">' + esc(e.event) + "</div>" +
       '<div class="tip-notes' + (notes ? "" : " none") + '">' + (notes ? esc(notes) : "No notes added.") + "</div>";
     var r = item.getBoundingClientRect();
@@ -544,6 +582,7 @@
     if (!tr) { // hidden by the search or category filter: clear them
       els.search.value = "";
       els.filter.value = "";
+      els.locFilter.value = "";
       render();
       renderTimeline();
       tr = els.rows.querySelector(sel);
@@ -596,6 +635,7 @@
       date: els.date.value,
       event: els.event.value.trim(),
       category: els.category.value,
+      location: els.location.value,
       notes: els.notes.value.trim()
     };
     if (!entry.event) { showMsg("Enter the event."); return; }
@@ -623,6 +663,7 @@
       els.date.value = entry.date;
       els.event.value = entry.event;
       els.category.value = entry.category;
+      els.location.value = entry.location || "";
       els.notes.value = entry.notes;
       els.save.textContent = "Save changes";
       els.title.textContent = "Edit event";
@@ -641,6 +682,7 @@
 
   els.search.addEventListener("input", render);
   els.filter.addEventListener("change", function () { render(); renderTimeline(); });
+  els.locFilter.addEventListener("change", function () { render(); renderTimeline(); });
 
   // ---- Export / import ----
   function download(name, text, type) {
@@ -659,8 +701,8 @@
   }
   $("export-csv").addEventListener("click", function () {
     var sorted = chronological();
-    var lines = ["No,Date,Event,Category,Notes"].concat(sorted.map(function (e, i) {
-      return [i + 1, e.date, e.event, e.category, e.notes].map(csvCell).join(",");
+    var lines = ["No,Date,Event,Category,Location,Notes"].concat(sorted.map(function (e, i) {
+      return [i + 1, e.date, e.event, e.category, e.location || "", e.notes].map(csvCell).join(",");
     }));
     download("event-log-" + today() + ".csv", "\ufeff" + lines.join("\r\n"), "text/csv;charset=utf-8");
   });
@@ -686,6 +728,7 @@
             date: String(e.date || ""),
             event: String(e.event),
             category: CATEGORIES.indexOf(RENAMED[e.category] || e.category) !== -1 ? (RENAMED[e.category] || e.category) : "Others",
+            location: LOCATIONS.indexOf(e.location) !== -1 ? e.location : "",
             notes: String(e.notes || "")
           };
         });
