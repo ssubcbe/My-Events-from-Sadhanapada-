@@ -128,21 +128,12 @@
     --track: #E4DED4;
     --line: calc(12px - 2pt);                  /* track thickness = inner circle diameter */
     --p: 84px;                                 /* distance between two rows */
-    --z: calc((var(--p) + var(--line)) / 2);   /* radius of the 180 degree turn */
     --rail-top: 22px;
     --item: 96px;
     position: relative; min-width: 760px;
   }
   .tl-row { position: relative; height: var(--p); }
-  .tl-bar { position: absolute; z-index: 0; top: var(--rail-top); height: var(--line); background: var(--track); }
-  .tl-curve {
-    position: absolute; z-index: 0; top: var(--rail-top);
-    width: var(--z); height: calc(var(--p) + var(--line));
-    border: var(--line) solid var(--track);
-  }
-  .tl-curve.right { right: 0; border-left: 0; border-radius: 0 var(--z) var(--z) 0; }
-  .tl-curve.left  { left: 0; border-right: 0; border-radius: var(--z) 0 0 var(--z); }
-
+  .tl-bar { position: absolute; z-index: 0; top: var(--rail-top); height: var(--line); background: var(--track); border-radius: 999px; }
   .tl-item {
     position: absolute; top: 0; z-index: 1; width: var(--item); height: var(--p);
     text-align: center; cursor: pointer; outline: none;
@@ -215,7 +206,7 @@
       <h2 id="tl-title">Timeline</h2>
       <div class="legend" id="legend" aria-hidden="true"></div>
     </div>
-    <p class="tl-hint">Latest event first. Hover over an event to read its notes, or click it to jump to it in the list below.</p>
+    <p class="tl-hint">Oldest event on the left, latest on the right. Hover over an event to read its notes, or click it to jump to it in the list below.</p>
     <div class="tl-scroll" id="tl-scroll"><div class="tl-board" id="tl-track"></div></div>
     <div class="empty" id="tl-empty" hidden>Events you add will appear here on a timeline.</div>
   </section>
@@ -270,7 +261,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
-  <p class="hint">Version: 3 Oct 2026 c (today marker on timeline)</p>
+  <p class="hint">Version: 3 Oct 2026 e (timeline: oldest first, left to right)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -425,11 +416,10 @@
 
   // Layout constants (kept in one place and passed to the CSS)
   var LINE = 12 - 2 * (96 / 72);          // track thickness: 12px reduced by 2pt
-  var ROW_P = 84;                          // distance between two rows
+  var ROW_P = 72;                          // distance between two rows
   var ITEM_W = 96;                         // width reserved for one event label
   var MIN_GAP = ITEM_W;                    // closest two events can sit without labels touching
-  var CURVE_Z = (ROW_P + LINE) / 2;        // radius of the 180 degree turn
-  var CROSS = ITEM_W + Math.PI * ROW_P / 2; // track length used up by one turn
+  var PAD = 12;                            // space at each end of a row
   var MAX_PX_PER_DAY = 14;
 
   function dayNumber(iso) {
@@ -437,24 +427,25 @@
     return p.length === 3 ? Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000 : NaN;
   }
 
-  // Place events (latest first) along a snaking track. The distance between two
+  // Place events (oldest first) along the track. The distance between two
   // events is proportional to the days between them, never less than MIN_GAP.
+  // When a row is full the track continues at the left of the next row.
   function layoutTimeline(list, boardW) {
-    var span = Math.max(ITEM_W, boardW - 2 * CURVE_Z - ITEM_W); // usable length of one row
+    var span = Math.max(ITEM_W, boardW - 2 * PAD - ITEM_W); // usable length of one row
     var days = list.map(function (e) { return dayNumber(e.date); });
-    var total = days[0] - days[days.length - 1];
+    var total = days[days.length - 1] - days[0];
     var k = total > 0 ? Math.min(MAX_PX_PER_DAY, Math.max(2.5, 5 * span / total)) : MAX_PX_PER_DAY;
     var rows = [{ items: [] }], cur = 0, u = 0;
     rows[0].items.push({ e: list[0], u: 0 });
     for (var i = 1; i < list.length; i++) {
-      var dd = days[i - 1] - days[i];
+      var dd = days[i] - days[i - 1];
       var g = Math.max(MIN_GAP, (isNaN(dd) ? 0 : dd) * k);
       if (rows[cur].items.length < PER_ROW && u + g <= span) {
         u += g;
       } else {
-        var left = g - (span - u) - CROSS;
+        var left = g - (span - u);
         cur++; rows[cur] = rows[cur] || { items: [] };
-        while (left > span) { left -= span + CROSS; cur++; rows[cur] = { items: [] }; }
+        while (left > span) { left -= span; cur++; rows[cur] = { items: [] }; }
         u = Math.max(0, left);
       }
       rows[cur].items.push({ e: list[i], u: u });
@@ -462,11 +453,11 @@
     return rows;
   }
 
-  // Latest event first. Rows run left to right, then right to left,
-  // joined by a 180 degree curve at each end.
+  // Oldest event on the left, latest on the right. Every row runs left to right,
+  // with the first event of each row at the left.
   function renderTimeline() {
     var cat = els.filter.value;
-    var list = chronological().filter(function (e) { return !cat || e.category === cat; }).reverse();
+    var list = chronological().filter(function (e) { return !cat || e.category === cat; });
     $("tl-empty").textContent = entries.length
       ? "No events in this category yet."
       : "Events you add will appear here on a timeline.";
@@ -481,33 +472,26 @@
     tlTrack.style.setProperty("--p", ROW_P + "px");
     tlTrack.style.setProperty("--item", ITEM_W + "px");
 
-    // Add today's date as a marker, placed by date among the events (latest first)
+    // Add today's date as a marker, placed by date among the events (oldest first)
     var todayIso = today();
     var marker = { id: "today", date: todayIso, event: "Today", isToday: true };
     var at = -1;
-    for (var t = 0; t < list.length; t++) { if ((list[t].date || "") <= todayIso) { at = t; break; } }
+    for (var t = 0; t < list.length; t++) { if ((list[t].date || "") > todayIso) { at = t; break; } }
     if (at === -1) list.push(marker); else list.splice(at, 0, marker);
 
     var rows = layoutTimeline(list, boardW);
     var html = "";
     rows.forEach(function (row, r) {
-      var rev = r % 2 === 1;
       var last = r === rows.length - 1;
-      var leftCap = r === 0 || (last && rev);
-      var rightCap = last && !rev;
-      var barL = CURVE_Z, barR = boardW - CURVE_Z;          // full row by default
+      var barL = PAD, barR = boardW - PAD;
       if (last && row.items.length) {                        // last row stops just past its final event
-        var lastU = row.items[row.items.length - 1].u;
-        if (rev) barL = Math.max(CURVE_Z, boardW - CURVE_Z - ITEM_W / 2 - lastU - ITEM_W / 2);
-        else barR = Math.min(boardW - CURVE_Z, CURVE_Z + ITEM_W / 2 + lastU + ITEM_W / 2);
+        barR = Math.min(barR, PAD + ITEM_W + row.items[row.items.length - 1].u);
       }
-      var rad = (leftCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (leftCap ? "6px" : "0");
       html += '<div class="tl-row">' +
-        '<div class="tl-bar" style="left:' + barL + "px;width:" + (barR - barL) + "px;border-radius:" + rad + '"></div>' +
-        (last ? "" : '<div class="tl-curve ' + (rev ? "left" : "right") + '"></div>') +
+        '<div class="tl-bar" style="left:' + barL + "px;width:" + (barR - barL) + 'px"></div>' +
         row.items.map(function (it) {
           var e = it.e;
-          var cx = rev ? boardW - CURVE_Z - ITEM_W / 2 - it.u : CURVE_Z + ITEM_W / 2 + it.u;
+          var cx = PAD + ITEM_W / 2 + it.u;
           if (e.isToday) {
             return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
               'style="left:' + (cx - ITEM_W / 2) + 'px;--dot:var(--today)">' +
