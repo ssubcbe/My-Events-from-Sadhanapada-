@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>My Events from Sadhanapada 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1f0;
+    --surface: #ffffff;
+    --ink: #1c2a2a;
+    --muted: #5d6b6b;
+    --head-bg: #f6f8f7;
+    --line: #d5dcdb;
+    --accent: #1f6f6b;
+    --accent-ink: #ffffff;
+    --danger: #a63d2f;
+    --c-sadhanapada: #0072B2;
+    --c-personal: #9B2C8F;
+    --c-isha: #D55E00;
+    --c-meeting: #00855F;
+    --c-others: #2B2B2B;
+    --today: #F2A900;
+    --font: "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .panel h2 { font-size: 1.05rem; margin: 0 0 14px; font-weight: 700; }
+  /* Title band across the top of each panel, same colour as the list header */
+  .panel > h2, .tl-head h2 { text-transform: uppercase; }
+  .panel > h2, .tl-head {
+    margin: -20px -20px 16px; padding: 12px 20px;
+    background: var(--head-bg); border-bottom: 1px solid var(--line);
+    border-radius: 10px 10px 0 0;
+  }
+
+  form { display: grid; grid-template-columns: 170px 1fr 230px 200px; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.notes { grid-column: 1 / -1; }
+  label { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+  input, select, textarea {
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid #b9c4c3;
+    border-radius: 6px;
+    padding: 9px 10px;
+    width: 100%;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible,
+  button:focus-visible {
+    outline: 3px solid #8fc9c4;
+    outline-offset: 1px;
+  }
+  .actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    border-radius: 6px; padding: 9px 16px;
+    border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.ghost { background: transparent; color: var(--accent); }
+  button.danger { border-color: var(--danger); color: var(--danger); background: transparent; }
+  button.small { padding: 4px 10px; font-size: 0.85rem; font-weight: 500; }
+  .msg { color: var(--danger); font-size: 0.9rem; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin: 28px 0 12px;
+  }
+  .toolbar .grow { flex: 1 1 200px; }
+  .toolbar select, .toolbar input { width: auto; }
+  .toolbar input[type="search"] { width: 100%; }
+  .count { color: var(--muted); font-size: 0.9rem; margin-left: auto; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  th, td { text-align: left; padding: 11px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { font-size: 0.85rem; font-weight: 600; color: var(--muted); background: var(--head-bg); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td { font-size: calc(1rem - 2pt); }
+  td.no { width: 56px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  td.date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.none { color: #9aa6a5; }
+  td.notes { color: #364444; white-space: pre-wrap; max-width: 320px; }
+  td.row-actions { white-space: nowrap; text-align: right; }
+  td.row-actions button { margin-left: 4px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 1em;
+  }
+  .tag::before {
+    content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--c-others));
+  }
+  .empty { padding: 36px 20px; text-align: center; color: var(--muted); }
+  tr.editing td { background: #eaf4f3; }
+
+  /* Timeline */
+  .timeline { margin-bottom: 20px; }
+  .tl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 18px; }
+  .tl-head { margin-bottom: 12px; }
+  .tl-head h2 { margin: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.82rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); }
+  .tl-hint { margin: 0; flex: 1 1 320px; font-size: 0.85rem; color: var(--muted); }
+  .tl-scroll { overflow-x: auto; padding: 4px 0 6px; }
+
+  .tl-board {
+    --track: #E4DED4;
+    --line: calc(12px - 2pt);                  /* track thickness = inner circle diameter */
+    --p: 84px;                                 /* distance between two rows */
+    --rail-top: 22px;
+    --item: 96px;
+    position: relative; min-width: 760px;
+  }
+  .tl-row { position: relative; height: var(--p); }
+  .tl-bar { position: absolute; z-index: 0; top: var(--rail-top); height: var(--line); background: var(--track); border-radius: 999px; }
+  .tl-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; margin-bottom: 28px; }
+  .view-toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--muted); }
+  .vt-label { cursor: pointer; user-select: none; }
+  .vt-label.active { color: var(--ink); font-weight: 600; }
+  .switch { position: relative; width: 46px; height: 26px; padding: 0; border-radius: 999px; border: 1px solid #8fa09f; background: #c9d3d2; }
+  .switch .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s ease; }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-checked="true"] .knob { transform: translateX(20px); }
+  .tl-board.monthly { min-width: 0; }
+  .tl-month + .tl-month { margin-top: 10px; }
+  .tl-month-title { margin: 0 0 6px; font-size: 0.9rem; font-weight: 700; display: flex; align-items: baseline; gap: 10px; }
+  .tl-month-title span { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+  .tl-month-scroll { overflow-x: auto; padding-bottom: 2px; }
+  .tl-mrow { --p: 62px; }
+  .tl-flag { position: absolute; left: 0; top: 0; z-index: 2; width: 48px; pointer-events: none; }
+  .tl-flag svg { display: block; }
+  .tl-flag span {
+    position: absolute; left: 0; top: calc(var(--rail-top) + var(--line) + 8px);
+    font-size: 0.78rem; line-height: 1.3; color: var(--muted);
+  }
+  .tl-curve {
+    position: absolute; z-index: 0; top: var(--rail-top);
+    width: var(--z); height: calc(var(--p) + var(--line));
+    border: var(--line) solid var(--track);
+  }
+  .tl-curve.right { right: 0; border-left: 0; border-radius: 0 var(--z) var(--z) 0; }
+  .tl-curve.left  { left: 0; border-right: 0; border-radius: var(--z) 0 0 var(--z); }
+  .tl-item {
+    position: absolute; top: 0; z-index: 1; width: var(--item); height: var(--p);
+    text-align: center; cursor: pointer; outline: none;
+  }
+  .tl-date, .tl-title {
+    position: absolute; left: 2px; right: 2px;
+    font-size: 0.78rem; font-weight: 400; line-height: 1.3; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+  .tl-date  { top: 0; }
+  .tl-title { top: calc(var(--rail-top) + var(--line) + 8px); }
+  .tl-dot {
+    position: absolute; left: 50%; top: calc(var(--rail-top) + var(--line) / 2);
+    width: calc(var(--line) + 6px); height: calc(var(--line) + 6px);
+    border-radius: 50%; background: var(--dot); border: 3px solid #fff;
+    transform: translate(-50%, -50%); transition: transform .15s ease;
+  }
+  .tl-item:hover .tl-dot, .tl-item:focus-visible .tl-dot, .tl-item.active .tl-dot { transform: translate(-50%, -50%) scale(1.3); }
+  .tl-item:hover .tl-title, .tl-item:focus-visible .tl-title, .tl-item.active .tl-title,
+  .tl-item:hover .tl-date, .tl-item:focus-visible .tl-date, .tl-item.active .tl-date { color: var(--ink); }
+  .tl-item:focus-visible { outline: 3px solid #8fc9c4; outline-offset: -2px; border-radius: 6px; }
+
+  /* Today marker: larger circle with a gentle flash */
+  .tl-today { cursor: default; }
+  .tl-today .tl-dot {
+    width: 30px; height: 30px; background: var(--today); border-width: 4px;
+    animation: todayflash 2.2s ease-in-out infinite;
+  }
+  .tl-item.tl-today:hover .tl-dot { transform: translate(-50%, -50%); }
+  .tl-today .tl-date, .tl-today .tl-title { color: var(--ink); }
+  @keyframes todayflash {
+    0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(242, 169, 0, .55); }
+    50%      { opacity: .55; box-shadow: 0 0 0 9px rgba(242, 169, 0, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .tl-today .tl-dot { animation: none; } }
+
+  tr.flash td { animation: rowflash 2.6s ease-out; }
+  @keyframes rowflash { from { background: #fbd5b8; } 60% { background: #fbd5b8; } to { background: transparent; } }
+
+  .tip {
+    position: fixed; top: 0; left: 0; z-index: 100; max-width: 320px;
+    background: #1c2a2a; color: #fff; border-radius: 8px; padding: 12px 14px;
+    font-size: 0.85rem; line-height: 1.5; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    pointer-events: none; visibility: hidden; opacity: 0; transition: opacity .12s ease;
+  }
+  .tip.show { visibility: visible; opacity: 1; }
+  .tip-meta { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: #c7d3d2; margin-bottom: 4px; }
+  .tip-meta::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); flex: none; }
+  .tip-title { font-weight: 600; margin-bottom: 6px; }
+  .tip-notes { color: #e6eceb; white-space: pre-wrap; }
+  .tip-notes.none { color: #9fb0af; font-style: italic; }
+
+  .data-tools { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
+
+  @media (max-width: 760px) {
+    form { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  /* Share page only */
+  .tl-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .tl-filters select { width: auto; min-width: 190px; }
+  .tl-item { cursor: pointer; }
+  .load-error { padding: 28px 20px; text-align: center; color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>My Events from Sadhanapada</h1>
+  <p class="sub">Events I attended or experienced during Sadhanapada 2026.</p>
+
+  <section class="panel timeline" aria-labelledby="tl-title">
+    <div class="tl-head">
+      <h2 id="tl-title">Timeline</h2>
+      <div class="legend" id="legend" aria-hidden="true"></div>
+    </div>
+    <div class="tl-filters">
+      <select id="filter" aria-label="Filter by category"></select>
+      <select id="filter-location" aria-label="Filter by location"></select>
+    </div>
+    <div class="tl-controls">
+      <p class="tl-hint" id="tl-hint"></p>
+      <div class="view-toggle" role="group" aria-label="Timeline view">
+        <span class="vt-label active" id="vt-existing">Existing view</span>
+        <button type="button" class="switch" id="view-switch" role="switch" aria-checked="false" aria-label="Show monthly view"><span class="knob"></span></button>
+        <span class="vt-label" id="vt-monthly">Monthly view</span>
+      </div>
+    </div>
+    <div class="tl-scroll" id="tl-scroll" hidden><div class="tl-board" id="tl-track"></div></div>
+    <div class="empty" id="tl-empty" hidden>No events to show yet.</div>
+    <div class="load-error" id="load-error" hidden>The events could not be loaded. Please try again in a little while.</div>
+  </section>
+</div>
+
+<div id="tip" class="tip" role="tooltip"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = { filter: $("filter"), locFilter: $("filter-location") };
+  var entries = [];
+
+  var CATEGORIES = ["Sadhanapada Events", "ISHA Program", "Monthly Meeting", "Personal", "Others"];
+  var COLORS = {
+    "Sadhanapada Events": "var(--c-sadhanapada)",
+    "ISHA Program": "var(--c-isha)",
+    "Monthly Meeting": "var(--c-meeting)",
+    "Personal": "var(--c-personal)",
+    "Others": "var(--c-others)"
+  };
+  var LOCATIONS = [
+    "Spanda Hall", "Adiyogi Alayam", "Surya Kund", "Vellingiri Prashala", "Chamundi Prashala",
+    "Adiyogi Statue", "Devi Temple", "Dhyanalinga Temple", "Kondrai Stay Area",
+    "Sevanthi Stay Area", "Welcome point"
+  ].sort(function (a, b) { return a.localeCompare(b); });   // ascending order
+  var RENAMED = { "Sadhanapada Program": "Sadhanapada Events" };
+
+  // ---- Helpers ----
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    if (p.length !== 3) return iso;
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  function chronological() {
+    return entries.slice().sort(function (a, b) {
+      return (a.date || "").localeCompare(b.date || "") || a.id - b.id;
+    });
+  }
+
+  // ---- Timeline ----
+  var PER_ROW = 8;
+  var tip = $("tip");
+  var tlTrack = $("tl-track");
+  var tlScroll = $("tl-scroll");
+
+  $("legend").innerHTML = CATEGORIES.map(function (c) {
+    return '<span style="--dot:' + COLORS[c] + '">' + esc(c) + "</span>";
+  }).join("") + '<span style="--dot:var(--today)">Today</span>';
+
+  function excerpt(text, maxWords) {
+    var words = String(text || "").trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return "";
+    return words.length > maxWords ? words.slice(0, maxWords).join(" ") + "..." : words.join(" ");
+  }
+
+  function timelineItems() { return tlTrack.querySelectorAll(".tl-item"); }
+
+  // Layout constants (kept in one place and passed to the CSS)
+  var LINE = 12 - 2 * (96 / 72);          // track thickness: 12px reduced by 2pt
+  var ROW_P = 72 * 1.2;                    // gap between two timelines: 72px + 20%
+  var ITEM_W = 96;                         // width reserved for one event label
+  var MIN_GAP = ITEM_W;                    // closest two events can sit without labels touching
+  var CURVE_Z = (ROW_P + LINE) / 2;        // radius of the 180 degree turn
+  var CROSS = ITEM_W + Math.PI * ROW_P / 2; // track length used up by one turn
+  var MAX_PX_PER_DAY = 14;
+  var VIEW_KEY = "event-log-share-view";
+  var viewMode = "existing";
+  try { if (localStorage.getItem(VIEW_KEY) === "monthly") viewMode = "monthly"; } catch (err) {}
+
+  function dayNumber(iso) {
+    var p = String(iso || "").split("-");
+    return p.length === 3 ? Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000 : NaN;
+  }
+
+  // Place events (oldest first) from left to right. The distance between two
+  // events is proportional to the days between them, never less than MIN_GAP.
+  // When a row is full the track makes a 180 degree turn straight into the next
+  // row, which runs back the other way (no empty lines in between).
+  function layoutTimeline(list, boardW) {
+    var span = Math.max(ITEM_W, boardW - 2 * CURVE_Z - ITEM_W); // usable length of one row
+    var days = list.map(function (e) { return dayNumber(e.date); });
+    var total = days[days.length - 1] - days[0];
+    var k = total > 0 ? Math.min(MAX_PX_PER_DAY, Math.max(2.5, 5 * span / total)) : MAX_PX_PER_DAY;
+    var rows = [{ items: [{ e: list[0], u: 0 }] }], cur = 0, u = 0;
+    for (var i = 1; i < list.length; i++) {
+      var dd = days[i] - days[i - 1];
+      var g = Math.max(MIN_GAP, (isNaN(dd) ? 0 : dd) * k);
+      if (rows[cur].items.length < PER_ROW && u + g <= span) {
+        u += g;
+      } else {
+        var left = g - (span - u) - CROSS;      // distance still to travel after the turn
+        cur++; rows[cur] = { items: [] };       // every row gets at least one event, so no blank timeline
+        u = Math.min(Math.max(0, left), span);
+      }
+      rows[cur].items.push({ e: list[i], u: u });
+    }
+    return rows;
+  }
+
+  function itemMarkup(e, cx) {
+    var left = cx - ITEM_W / 2;
+    if (e.isToday) {
+      return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
+        'style="left:' + left + 'px;--dot:var(--today)">' +
+        '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+        '<span class="tl-dot"></span>' +
+        '<div class="tl-title">Today</div></div>';
+    }
+    var color = COLORS[e.category] || "var(--c-others)";
+    var label = e.event + ", " + formatDate(e.date) + ", " + e.category + (e.location ? ", " + e.location : "") + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
+    return '<div class="tl-item" role="button" tabindex="0" data-id="' + esc(e.id) + '" ' +
+      'style="left:' + left + "px;--dot:" + color + '" aria-label="' + esc(label) + '">' +
+      '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+      '<span class="tl-dot"></span>' +
+      '<div class="tl-title">' + esc(e.event) + "</div></div>";
+  }
+
+  // Monthly view: one single-row timeline per month holding all of that month's
+  // events, placed by day of the month. Months without events are skipped.
+  var MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"];
+
+  function renderMonthly(list) {
+    var boardW = Math.max(320, tlScroll.clientWidth);
+    tlTrack.style.width = "";
+    tlTrack.style.setProperty("--line", LINE + "px");
+    tlTrack.style.setProperty("--item", ITEM_W + "px");
+
+    var todayIso = today(), todayKey = todayIso.slice(0, 7);
+    var groups = {}, keys = [];
+    list.forEach(function (e) {
+      var k = String(e.date || "").slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(k)) return;
+      if (!groups[k]) { groups[k] = []; keys.push(k); }
+      groups[k].push(e);
+    });
+    if (!groups[todayKey]) { groups[todayKey] = []; keys.push(todayKey); }
+    keys.sort();
+
+    var html = "";
+    keys.forEach(function (k) {
+      var items = groups[k].slice();
+      var count = items.length;
+      if (k === todayKey) {
+        var marker = { id: "today", date: todayIso, event: "Today", isToday: true };
+        var at = -1;
+        for (var t = 0; t < items.length; t++) { if ((items[t].date || "") > todayIso) { at = t; break; } }
+        if (at === -1) items.push(marker); else items.splice(at, 0, marker);
+      }
+      var y = +k.slice(0, 4), m = +k.slice(5, 7);
+      var dim = new Date(y, m, 0).getDate();
+      var padX = ITEM_W / 2 + 12;
+      var inner = Math.max(0, boardW - 2 * padX);
+      var prev = -Infinity;
+      var xs = items.map(function (e) {
+        var d = parseInt(String(e.date).slice(8, 10), 10) || 1;
+        var x = padX + (dim > 1 ? (d - 1) / (dim - 1) : 0) * inner;
+        x = Math.max(x, prev + MIN_GAP);       // keep labels from touching
+        prev = x;
+        return x;
+      });
+      var rowW = Math.max(boardW, prev + padX);
+      html += '<section class="tl-month">' +
+        '<h3 class="tl-month-title">' + MONTH_NAMES[m - 1] + " " + y + "<span>" +
+          (count ? count + (count === 1 ? " event" : " events") : "no events yet") + "</span></h3>" +
+        '<div class="tl-month-scroll"><div class="tl-row tl-mrow" style="width:' + rowW + 'px">' +
+        '<div class="tl-bar" style="left:8px;width:' + (rowW - 16) + 'px;border-radius:6px"></div>' +
+        items.map(function (e, i) { return itemMarkup(e, xs[i]); }).join("") +
+        "</div></div></section>";
+    });
+    tlTrack.innerHTML = html;
+  }
+
+  // Oldest event on the left, newest on the right. Every row reads left to
+  // right; rows are joined by a 180 degree curve, a return lane and another curve.
+  function renderTimeline() {
+    var cat = els.filter.value, loc = els.locFilter.value;
+    var list = chronological().filter(function (e) {
+      return (!cat || e.category === cat) && (!loc || e.location === loc);
+    });
+    $("tl-empty").textContent = entries.length
+      ? "No events match the selected category and location."
+      : "No events to show yet.";
+    $("tl-empty").hidden = list.length > 0;
+    tlScroll.hidden = list.length === 0;
+    hideTip();
+    if (!list.length) { tlTrack.innerHTML = ""; return; }
+
+    tlTrack.classList.toggle("monthly", viewMode === "monthly");
+    if (viewMode === "monthly") { renderMonthly(list); return; }
+
+    var boardW = Math.max(760, tlScroll.clientWidth);
+    tlTrack.style.width = boardW + "px";
+    tlTrack.style.setProperty("--line", LINE + "px");
+    tlTrack.style.setProperty("--p", ROW_P + "px");
+    tlTrack.style.setProperty("--item", ITEM_W + "px");
+    tlTrack.style.setProperty("--z", CURVE_Z + "px");
+
+    // Add today's date as a marker, placed by date among the events
+    var todayIso = today();
+    var marker = { id: "today", date: todayIso, event: "Today", isToday: true };
+    var at = -1;
+    for (var t = 0; t < list.length; t++) { if ((list[t].date || "") > todayIso) { at = t; break; } }
+    if (at === -1) list.push(marker); else list.splice(at, 0, marker);
+
+    var rows = layoutTimeline(list, boardW);
+    var html = "";
+    rows.forEach(function (row, r) {
+      var rev = r % 2 === 1;                                   // odd rows run right to left
+      var last = r === rows.length - 1;
+      var leftCap = r === 0 || (last && rev), rightCap = last && !rev;
+      var barL = r === 0 ? 10 : CURVE_Z, barR = boardW - CURVE_Z;   // full row by default
+      if (last && row.items.length) {                          // last row stops just past its final event
+        var lastU = row.items[row.items.length - 1].u;
+        if (rev) barL = Math.max(CURVE_Z, boardW - CURVE_Z - ITEM_W - lastU);
+        else barR = Math.min(boardW - CURVE_Z, CURVE_Z + ITEM_W + lastU);
+      }
+      var rad = (leftCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (rightCap ? "6px" : "0") + " " + (leftCap ? "6px" : "0");
+      html += '<div class="tl-row">' +
+        (r === 0 ? '<div class="tl-flag" role="img" aria-label="Start">' +
+          '<svg width="44" height="30" viewBox="0 0 44 30" aria-hidden="true">' +
+          '<path d="M11.2 2.5 L38 9.8 L11.2 17 Z" fill="#1B9E5A"/>' +
+          '<line x1="10" y1="1.5" x2="10" y2="27" stroke="#1c2a2a" stroke-width="2.6" stroke-linecap="round"/></svg>' +
+          "<span>Start</span></div>" : "") +
+        '<div class="tl-bar" style="left:' + barL + "px;width:" + (barR - barL) + "px;border-radius:" + rad + '"></div>' +
+        (last ? "" : '<div class="tl-curve ' + (rev ? "left" : "right") + '"></div>') +
+        row.items.map(function (it) {
+          var cx = rev ? boardW - CURVE_Z - ITEM_W / 2 - it.u : CURVE_Z + ITEM_W / 2 + it.u;
+          return itemMarkup(it.e, cx);
+        }).join("") +
+        "</div>";
+    });
+    tlTrack.innerHTML = html;
+  }
+
+  function showTip(item) {
+    var id = parseInt(item.getAttribute("data-id"), 10);
+    var e = entries.filter(function (x) { return x.id === id; })[0];
+    if (!e) return;
+    var notes = excerpt(e.notes, 25);
+    tip.style.setProperty("--dot", COLORS[e.category] || "var(--c-others)");
+    tip.innerHTML =
+      '<div class="tip-meta">' + esc(formatDate(e.date)) + " \u00b7 " + esc(e.category) + (e.location ? " \u00b7 " + esc(e.location) : "") + "</div>" +
+      '<div class="tip-title">' + esc(e.event) + "</div>" +
+      '<div class="tip-notes' + (notes ? "" : " none") + '">' + (notes ? esc(notes) : "No notes added.") + "</div>";
+    var r = item.getBoundingClientRect();
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    var top = r.top - h - 4;
+    if (top < 8) top = r.bottom + 4;
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8));
+    tip.style.top = top + "px";
+    tip.style.left = left + "px";
+    tip.classList.add("show");
+    Array.prototype.forEach.call(timelineItems(), function (li) { li.classList.toggle("active", li === item); });
+  }
+  function hideTip() {
+    tip.classList.remove("show");
+    Array.prototype.forEach.call(timelineItems(), function (li) { li.classList.remove("active"); });
+  }
+
+  var pinned = null;   // an event opened by a tap or click stays open until you tap elsewhere
+  function itemOf(ev) { return ev.target.closest(".tl-item:not(.tl-today)"); }
+  tlTrack.addEventListener("mouseover", function (ev) {
+    var item = itemOf(ev);
+    if (item) { pinned = null; showTip(item); }
+  });
+  tlTrack.addEventListener("mouseout", function () { if (!pinned) hideTip(); });
+  tlTrack.addEventListener("focusin", function (ev) {
+    var item = itemOf(ev);
+    if (item && !pinned) showTip(item);
+  });
+  tlTrack.addEventListener("focusout", function () { if (!pinned) hideTip(); });
+  tlTrack.addEventListener("click", function (ev) {
+    var item = itemOf(ev);
+    if (item) { pinned = item; showTip(item); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest(".tl-item")) { pinned = null; hideTip(); }
+  });
+  function refreshTip() {
+    if (pinned && document.body.contains(pinned)) showTip(pinned);
+    else { pinned = null; hideTip(); }
+  }
+  tlScroll.addEventListener("scroll", refreshTip);
+  window.addEventListener("scroll", refreshTip, { passive: true });
+  var resizeTimer;
+  window.addEventListener("resize", function () {
+    pinned = null;
+    hideTip();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderTimeline, 150);
+  });
+
+  // ---- View switch: existing view / monthly view ----
+  var viewSwitch = $("view-switch");
+  var HINT_EXISTING = "Oldest event on the left, latest on the right. Hover over (or tap) an event to read its notes.";
+  var HINT_MONTHLY = "One timeline per month with all of that month\u2019s events. Hover over (or tap) an event to read its notes.";
+  function applyView() {
+    var monthly = viewMode === "monthly";
+    viewSwitch.setAttribute("aria-checked", monthly ? "true" : "false");
+    $("vt-existing").classList.toggle("active", !monthly);
+    $("vt-monthly").classList.toggle("active", monthly);
+    $("tl-hint").textContent = monthly ? HINT_MONTHLY : HINT_EXISTING;
+  }
+  function setView(mode) {
+    viewMode = mode;
+    try { localStorage.setItem(VIEW_KEY, mode); } catch (err) {}
+    applyView();
+    renderTimeline();
+  }
+  viewSwitch.addEventListener("click", function () { setView(viewMode === "monthly" ? "existing" : "monthly"); });
+  $("vt-existing").addEventListener("click", function () { setView("existing"); });
+  $("vt-monthly").addEventListener("click", function () { setView("monthly"); });
+  applyView();
+
+
+  // ---- Load the events published in events.json ----
+  function normalise(data) {
+    if (!Array.isArray(data)) return [];
+    return data.filter(function (e) { return e && e.event && e.date; }).map(function (e, i) {
+      var cat = RENAMED[e.category] || e.category;
+      return {
+        id: e.id != null ? e.id : (e.no != null ? e.no : i + 1),
+        date: String(e.date),
+        event: String(e.event),
+        category: CATEGORIES.indexOf(cat) !== -1 ? cat : "Others",
+        location: LOCATIONS.indexOf(e.location) !== -1 ? e.location : "",
+        notes: String(e.notes || "")
+      };
+    });
+  }
+
+  // Only offer filter choices that have events
+  function fillFilters() {
+    var cats = {}, locs = {};
+    entries.forEach(function (e) { cats[e.category] = true; if (e.location) locs[e.location] = true; });
+    els.filter.innerHTML = '<option value="">All Category</option>' + CATEGORIES.filter(function (c) { return cats[c]; })
+      .map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + "</option>"; }).join("");
+    els.locFilter.innerHTML = '<option value="">All Location</option>' + LOCATIONS.filter(function (l) { return locs[l]; })
+      .map(function (l) { return '<option value="' + esc(l) + '">' + esc(l) + "</option>"; }).join("");
+  }
+  els.filter.addEventListener("change", renderTimeline);
+  els.locFilter.addEventListener("change", renderTimeline);
+
+  fetch("events.json", { cache: "no-store" })
+    .then(function (r) { if (!r.ok) throw new Error("not found"); return r.json(); })
+    .then(function (data) {
+      entries = normalise(data);
+      fillFilters();
+      renderTimeline();
+    })
+    .catch(function () {
+      $("load-error").hidden = false;
+    });
+})();
+</script>
+</body>
+</html>

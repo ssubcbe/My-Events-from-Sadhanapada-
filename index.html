@@ -297,11 +297,12 @@
   <div class="data-tools">
     <button class="ghost" id="export-csv">Download CSV</button>
     <button class="ghost" id="export-json">Download backup</button>
+    <button class="ghost" id="export-share">Download events.json for share page</button>
     <button class="ghost" id="import-btn">Restore backup</button>
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
-  <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser.</p>
-  <p class="hint">Version: 3 Oct 2026 i (blank lines removed, rows joined by curves)</p>
+  <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser. The share page (timeline.html) shows the events from the events.json file in your GitHub repository, so upload a fresh events.json whenever you want to update it.</p>
+  <p class="hint">Version: 3 Oct 2026 j (share page export)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -827,6 +828,9 @@
   });
   $("export-json").addEventListener("click", function () {
     download("event-log-backup-" + today() + ".json", JSON.stringify(entries, null, 2), "application/json");
+  });
+  $("export-share").addEventListener("click", function () {
+    download("events.json", JSON.stringify(chronological(), null, 2), "application/json");
   });
   $("import-btn").addEventListener("click", function () { $("import-file").click(); });
   $("import-file").addEventListener("change", function (ev) {
