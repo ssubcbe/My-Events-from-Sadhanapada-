@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>My Events from Sadhanapada 2026</title>
+<title>Suresh Subramanian - SP Event Log</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -120,9 +120,16 @@
   .tl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 18px; }
   .tl-head { margin-bottom: 12px; }
   .tl-head h2 { margin: 0; }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.82rem; color: var(--muted); }
-  .legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .legend span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 4px; font-size: 0.82rem; color: var(--muted); }
+  .legend span, .legend .legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; }
+  .legend span::before, .legend .legend-item::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--dot); flex: none; }
+  .legend .legend-item {
+    font: inherit; font-weight: 400; color: var(--muted); background: transparent;
+    border: 1px solid transparent; border-radius: 999px; cursor: pointer;
+  }
+  .legend .legend-item:hover { background: #fff; border-color: var(--line); }
+  .legend .legend-item[aria-pressed="true"] { background: #fff; border-color: var(--dot); color: var(--ink); font-weight: 600; }
+  .legend.has-active .legend-item[aria-pressed="false"] { opacity: .6; }
   .tl-hint { margin: 0; flex: 1 1 320px; font-size: 0.85rem; color: var(--muted); }
   .tl-scroll { overflow-x: auto; padding: 4px 0 6px; }
 
@@ -233,13 +240,13 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>My Events from Sadhanapada</h1>
+  <h1>Suresh Subramanian - SP Event Log</h1>
   <p class="sub">Events I attended or experienced during Sadhanapada 2026.</p>
 
   <section class="panel timeline" aria-labelledby="tl-title">
     <div class="tl-head">
       <h2 id="tl-title">Timeline</h2>
-      <div class="legend" id="legend" aria-hidden="true"></div>
+      <div class="legend" id="legend"></div>
     </div>
     <div class="tl-filters">
       <select id="filter" aria-label="Filter by category"></select>
@@ -316,9 +323,30 @@
   var tlTrack = $("tl-track");
   var tlScroll = $("tl-scroll");
 
-  $("legend").innerHTML = CATEGORIES.map(function (c) {
-    return '<span style="--dot:' + COLORS[c] + '">' + esc(c) + "</span>";
-  }).join("") + '<span style="--dot:var(--today)">Today</span>';
+  // Legend: click a category to show only that category, click it again to switch it off.
+  // It drives the Category filter, so the list and the timeline always agree.
+  var legendEl = $("legend");
+  function buildLegend(cats) {
+    legendEl.innerHTML = cats.map(function (c) {
+      return '<button type="button" class="legend-item" data-cat="' + esc(c) + '" style="--dot:' + COLORS[c] +
+        '" aria-pressed="false" title="Show only ' + esc(c) + '">' + esc(c) + "</button>";
+    }).join("") + '<span style="--dot:var(--today)">Today</span>';
+  }
+  function syncLegend() {
+    var cat = els.filter.value;
+    Array.prototype.forEach.call(legendEl.querySelectorAll(".legend-item"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-cat") === cat ? "true" : "false");
+    });
+    legendEl.classList.toggle("has-active", !!cat);
+  }
+  legendEl.addEventListener("click", function (ev) {
+    var b = ev.target.closest(".legend-item");
+    if (!b) return;
+    var cat = b.getAttribute("data-cat");
+    els.filter.value = els.filter.value === cat ? "" : cat;   // only one at a time
+    renderTimeline();
+  });
+  buildLegend(CATEGORIES);
 
   function excerpt(text, maxWords) {
     var words = String(text || "").trim().split(/\s+/).filter(Boolean);
@@ -448,6 +476,7 @@
   // right; rows are joined by a 180 degree curve, a return lane and another curve.
   function renderTimeline() {
     var cat = els.filter.value, loc = els.locFilter.value;
+    syncLegend();
     var list = chronological().filter(function (e) {
       return (!cat || e.category === cat) && (!loc || e.location === loc);
     });
@@ -611,6 +640,7 @@
       .map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + "</option>"; }).join("");
     els.locFilter.innerHTML = '<option value="">All Location</option>' + LOCATIONS.filter(function (l) { return locs[l]; })
       .map(function (l) { return '<option value="' + esc(l) + '">' + esc(l) + "</option>"; }).join("");
+    buildLegend(CATEGORIES.filter(function (c) { return cats[c]; }));
   }
   els.filter.addEventListener("change", renderTimeline);
   els.locFilter.addEventListener("change", renderTimeline);
