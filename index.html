@@ -138,7 +138,7 @@
     --p: 84px;                                 /* distance between two rows */
     --rail-top: 22px;
     --item: 96px;
-    position: relative; min-width: 760px;
+    position: relative;
   }
   .tl-row { position: relative; height: var(--p); }
   .tl-bar { position: absolute; z-index: 0; top: var(--rail-top); height: var(--line); background: var(--track); border-radius: 999px; }
@@ -205,6 +205,16 @@
     50%      { opacity: .55; box-shadow: 0 0 0 9px rgba(242, 169, 0, 0); }
   }
   @media (prefers-reduced-motion: reduce) { .tl-today .tl-dot { animation: none; } }
+
+  .tl-board.compact .tl-date, .tl-board.compact .tl-title { font-size: 0.72rem; }
+  @media (max-width: 640px) {
+    .panel.timeline { padding: 12px; }
+    .timeline .tl-head { margin: -12px -12px 12px; padding: 10px 12px; }
+    .legend .legend-item { padding: 5px 10px; }
+    .legend span { padding: 5px 4px; }
+    .tl-controls { margin-bottom: 18px; }
+    .tip { max-width: calc(100vw - 16px); }
+  }
 
   tr.flash td { animation: rowflash 2.6s ease-out; }
   @keyframes rowflash { from { background: #fbd5b8; } 60% { background: #fbd5b8; } to { background: transparent; } }
@@ -309,7 +319,7 @@
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
   <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser. The share page (timeline.html) shows the events from the events.json file in your GitHub repository, so upload a fresh events.json whenever you want to update it.</p>
-  <p class="hint">Version: 3 Oct 2026 k (legend filter, new title)</p>
+  <p class="hint">Version: 3 Oct 2026 l (timeline fits mobile screens)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
@@ -507,6 +517,29 @@
   var CURVE_Z = (ROW_P + LINE) / 2;        // radius of the 180 degree turn
   var CROSS = ITEM_W + Math.PI * ROW_P / 2; // track length used up by one turn
   var MAX_PX_PER_DAY = 14;
+  var compact = false;                     // true on phones and small tablets
+  var showYear = true;
+
+  // Wide screens: 8 events per row. Narrower screens: smaller labels and as many
+  // events per row as fit, so the timeline fits the screen without sideways scrolling.
+  function applyMetrics(avail) {
+    compact = avail < 760;
+    ITEM_W = compact ? 72 : 96;
+    ROW_P = compact ? 72 : 72 * 1.2;
+    MIN_GAP = ITEM_W;
+    CURVE_Z = (ROW_P + LINE) / 2;
+    CROSS = ITEM_W + Math.PI * ROW_P / 2;
+    PER_ROW = compact ? Math.min(8, Math.max(2, Math.floor((Math.max(260, avail) - 2 * CURVE_Z) / ITEM_W))) : 8;
+  }
+
+  // Short date for small screens ("25 Aug"); the year is added only if events span several years
+  function dateLabel(iso) {
+    if (!compact) return formatDate(iso);
+    var p = String(iso || "").split("-");
+    if (p.length !== 3) return iso;
+    var base = new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+    return showYear ? base + " \u2019" + p[0].slice(2) : base;
+  }
   var VIEW_KEY = "event-log-view";
   var viewMode = "existing";
   try { if (localStorage.getItem(VIEW_KEY) === "monthly") viewMode = "monthly"; } catch (err) {}
@@ -546,7 +579,7 @@
     if (e.isToday) {
       return '<div class="tl-item tl-today" role="img" aria-label="Today, ' + esc(formatDate(e.date)) + '" ' +
         'style="left:' + left + 'px;--dot:var(--today)">' +
-        '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+        '<div class="tl-date">' + esc(dateLabel(e.date)) + "</div>" +
         '<span class="tl-dot"></span>' +
         '<div class="tl-title">Today</div></div>';
     }
@@ -554,7 +587,7 @@
     var label = e.event + ", " + formatDate(e.date) + ", " + e.category + (e.location ? ", " + e.location : "") + ". " + (excerpt(e.notes, 25) || "No notes.") + " Press Enter to go to this event.";
     return '<div class="tl-item" role="button" tabindex="0" data-id="' + esc(e.id) + '" ' +
       'style="left:' + left + "px;--dot:" + color + '" aria-label="' + esc(label) + '">' +
-      '<div class="tl-date">' + esc(formatDate(e.date)) + "</div>" +
+      '<div class="tl-date">' + esc(dateLabel(e.date)) + "</div>" +
       '<span class="tl-dot"></span>' +
       '<div class="tl-title">' + esc(e.event) + "</div></div>";
   }
@@ -565,7 +598,7 @@
     "August", "September", "October", "November", "December"];
 
   function renderMonthly(list) {
-    var boardW = Math.max(320, tlScroll.clientWidth);
+    var boardW = Math.max(260, tlScroll.clientWidth);
     tlTrack.style.width = "";
     tlTrack.style.setProperty("--line", LINE + "px");
     tlTrack.style.setProperty("--item", ITEM_W + "px");
@@ -593,13 +626,14 @@
       }
       var y = +k.slice(0, 4), m = +k.slice(5, 7);
       var dim = new Date(y, m, 0).getDate();
-      var padX = ITEM_W / 2 + 12;
+      var padX = ITEM_W / 2 + (compact ? 4 : 12);
+      var minGap = compact ? 60 : MIN_GAP;      // labels are narrower on phones
       var inner = Math.max(0, boardW - 2 * padX);
       var prev = -Infinity;
       var xs = items.map(function (e) {
         var d = parseInt(String(e.date).slice(8, 10), 10) || 1;
         var x = padX + (dim > 1 ? (d - 1) / (dim - 1) : 0) * inner;
-        x = Math.max(x, prev + MIN_GAP);       // keep labels from touching
+        x = Math.max(x, prev + minGap);        // keep labels from touching
         prev = x;
         return x;
       });
@@ -631,10 +665,17 @@
     hideTip();
     if (!list.length) { tlTrack.innerHTML = ""; return; }
 
+    var avail = tlScroll.clientWidth;
+    applyMetrics(avail);
+    var years = {};
+    list.forEach(function (e) { years[String(e.date).slice(0, 4)] = true; });
+    years[today().slice(0, 4)] = true;
+    showYear = Object.keys(years).length > 1;
+    tlTrack.classList.toggle("compact", compact);
     tlTrack.classList.toggle("monthly", viewMode === "monthly");
-    if (viewMode === "monthly") { renderMonthly(list); return; }
+    if (viewMode === "monthly") { showYear = false; renderMonthly(list); return; }
 
-    var boardW = Math.max(760, tlScroll.clientWidth);
+    var boardW = Math.max(compact ? 260 : 760, avail);
     tlTrack.style.width = boardW + "px";
     tlTrack.style.setProperty("--line", LINE + "px");
     tlTrack.style.setProperty("--p", ROW_P + "px");
