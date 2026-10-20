@@ -232,6 +232,16 @@
   .tip-notes { color: #e6eceb; white-space: pre-wrap; }
   .tip-notes.none { color: #9fb0af; font-style: italic; }
 
+  /* Sign-in bar and notices */
+  .auth { margin-bottom: 20px; padding: 14px 20px; }
+  .auth form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .auth .field { flex: 1 1 200px; }
+  .auth-note { margin: 0 0 10px; color: var(--muted); font-size: 0.9rem; }
+  .auth-in { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; font-size: 0.9rem; }
+  .notice { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: #fff4e0; border: 1px solid #f0c987; font-size: 0.9rem; }
+  .notice.error { background: #fdecea; border-color: #e3a79f; color: #7a2418; }
+  .notice button { margin-left: 8px; }
+  body.readonly #form-panel, body.readonly .row-actions, body.readonly #import-btn { display: none; }
   .data-tools { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
 
@@ -245,6 +255,23 @@
 <div class="wrap">
   <h1>Suresh Subramanian - SP Event Log</h1>
   <p class="sub">Record events with a date, category and notes.</p>
+
+  <section class="panel auth" id="auth-panel" aria-label="Sign in">
+    <div id="auth-out">
+      <p class="auth-note">Anyone can view the events. Sign in to add, edit or delete them.</p>
+      <form id="login-form">
+        <div class="field"><label for="auth-email">Email</label><input id="auth-email" type="email" autocomplete="username" required></div>
+        <div class="field"><label for="auth-pass">Password</label><input id="auth-pass" type="password" autocomplete="current-password" required></div>
+        <button type="submit" id="auth-btn">Sign in</button>
+      </form>
+      <p class="msg" id="auth-msg" role="alert"></p>
+    </div>
+    <div class="auth-in" id="auth-in" hidden>
+      <span>Signed in as <strong id="who"></strong></span>
+      <button type="button" class="ghost small" id="signout">Sign out</button>
+    </div>
+    <div class="notice" id="notice" hidden></div>
+  </section>
 
   <section class="panel timeline" aria-labelledby="tl-title">
     <div class="tl-head">
@@ -263,7 +290,7 @@
     <div class="empty" id="tl-empty" hidden>Events you add will appear here on a timeline.</div>
   </section>
 
-  <section class="panel">
+  <section class="panel" id="form-panel">
     <h2 id="form-title">Add an event</h2>
     <form id="form" autocomplete="off">
       <div class="field">
@@ -314,16 +341,17 @@
   <div class="data-tools">
     <button class="ghost" id="export-csv">Download CSV</button>
     <button class="ghost" id="export-json">Download backup</button>
-    <button class="ghost" id="export-share">Download events.json for share page</button>
-    <button class="ghost" id="import-btn">Restore backup</button>
+    <button class="ghost" id="import-btn">Import backup (.json)</button>
     <input type="file" id="import-file" accept="application/json,.json" hidden>
   </div>
-  <p class="hint">Events are saved in this browser only. Download a backup to move them to another device or browser. The share page (timeline.html) shows the events from the events.json file in your GitHub repository, so upload a fresh events.json whenever you want to update it.</p>
-  <p class="hint">Version: 3 Oct 2026 l (timeline fits mobile screens)</p>
+  <p class="hint">Events are stored in your Supabase database, so they are the same on every device. The share page (timeline.html) reads the same data, so it is always up to date.</p>
+  <p class="hint">Version: 20 Oct 2026 m (Supabase database)</p>
 </div>
 
 <div id="tip" class="tip" role="tooltip"></div>
 
+<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
   "use strict";
@@ -343,7 +371,8 @@
     "Sevanthi Stay Area", "Welcome point"
   ].sort(function (a, b) { return a.localeCompare(b); });   // ascending order
   var RENAMED = { "Sadhanapada Program": "Sadhanapada Events" };
-  var STORAGE_KEY = "event-log-v1";
+  var STORAGE_KEY = "event-log-v1";            // old browser storage, only read once to migrate
+  var MIGRATED_KEY = "event-log-migrated";
 
   var $ = function (id) { return document.getElementById(id); };
   var els = {
@@ -353,31 +382,75 @@
     search: $("search"), filter: $("filter"), count: $("count")
   };
 
-  var entries = load();
+  var entries = [];
   var editingId = null;
+  var signedIn = false;
 
-  // ---- Storage ----
-  function load() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      var data = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(data)) return [];
-      // Older saves used "no" as the identifier; keep it as the internal id
-      return data.map(function (e, i) {
-        if (e.id == null) e.id = e.no != null ? e.no : i + 1;
-        if (RENAMED[e.category]) e.category = RENAMED[e.category];
-        if (LOCATIONS.indexOf(e.location) === -1) e.location = "";
-        return e;
-      });
-    } catch (e) { return []; }
+  // ---- Supabase ----
+  var CONFIGURED = !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY &&
+    !/PASTE_/.test(window.SUPABASE_URL) && !/PASTE_/.test(window.SUPABASE_ANON_KEY) && window.supabase);
+  var sb = CONFIGURED ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) : null;
+  var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function fromRow(r) {
+    return { id: r.id, date: r.event_date, event: r.event, category: r.category,
+             location: r.location || "", notes: r.notes || "" };
   }
-  function persist() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-    } catch (e) {
-      showMsg("Could not save in this browser. Download a backup to keep your data.");
+  function toRow(e) {
+    return { event_date: e.date, event: e.event, category: e.category, location: e.location || "", notes: e.notes || "" };
+  }
+  // Clean one record from a backup file or from the old browser storage
+  function cleanEntry(e) {
+    if (!e || !e.event || !DATE_RE.test(String(e.date || ""))) return null;
+    var cat = RENAMED[e.category] || e.category;
+    return {
+      date: String(e.date),
+      event: String(e.event).slice(0, 200),
+      category: CATEGORIES.indexOf(cat) !== -1 ? cat : "Others",
+      location: LOCATIONS.indexOf(e.location) !== -1 ? e.location : "",
+      notes: String(e.notes || "")
+    };
+  }
+  function keyOf(e) { return e.date + "|" + e.event.trim().toLowerCase() + "|" + e.category; }
+
+  var noticeEl = $("notice");
+  function showNotice(html, isError) {
+    noticeEl.className = "notice" + (isError ? " error" : "");
+    noticeEl.innerHTML = html;
+    noticeEl.hidden = !html;
+  }
+
+  async function loadEvents() {
+    if (!sb) return false;
+    var all = [], from = 0, size = 1000;
+    for (;;) {
+      var res = await sb.from("events").select("*").order("event_date", { ascending: true })
+        .order("id", { ascending: true }).range(from, from + size - 1);
+      if (res.error) { showNotice("Could not load the events: " + esc(res.error.message), true); return false; }
+      all = all.concat(res.data || []);
+      if (!res.data || res.data.length < size) break;
+      from += size;
     }
-    renderTimeline();
+    entries = all.map(fromRow);
+    return true;
+  }
+  function refresh() { render(); renderTimeline(); }
+
+  // Insert records, skipping any that already exist (same date, event and category)
+  async function importEntries(list) {
+    var have = {};
+    entries.forEach(function (e) { have[keyOf(e)] = true; });
+    var fresh = [], skipped = 0;
+    list.forEach(function (e) {
+      var k = keyOf(e);
+      if (have[k]) { skipped++; return; }
+      have[k] = true; fresh.push(e);
+    });
+    for (var i = 0; i < fresh.length; i += 200) {
+      var res = await sb.from("events").insert(fresh.slice(i, i + 200).map(toRow)).select("id");
+      if (res.error) throw new Error(res.error.message);
+    }
+    return { added: fresh.length, skipped: skipped };
   }
 
   // ---- Helpers ----
@@ -396,9 +469,6 @@
     if (p.length !== 3) return iso;
     var d = new Date(+p[0], +p[1] - 1, +p[2]);
     return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  }
-  function nextId() {
-    return entries.reduce(function (m, e) { return Math.max(m, +e.id || 0); }, 0) + 1;
   }
   // Oldest to newest; same-date events keep the order they were added
   function chronological() {
@@ -819,10 +889,10 @@
   applyView();
 
   // ---- Events ----
-  els.form.addEventListener("submit", function (ev) {
+  els.form.addEventListener("submit", async function (ev) {
     ev.preventDefault();
+    if (!sb || !signedIn) { showMsg("Please sign in first."); return; }
     var entry = {
-      id: editingId !== null ? editingId : nextId(),
       date: els.date.value,
       event: els.event.value.trim(),
       category: els.category.value,
@@ -830,15 +900,19 @@
       notes: els.notes.value.trim()
     };
     if (!entry.event) { showMsg("Enter the event."); return; }
-
-    if (editingId !== null) {
-      entries = entries.map(function (e) { return e.id === editingId ? entry : e; });
-    } else {
-      entries.push(entry);
+    els.save.disabled = true;
+    showMsg("Saving…");
+    var res = editingId !== null
+      ? await sb.from("events").update(toRow(entry)).eq("id", editingId).select()
+      : await sb.from("events").insert(toRow(entry)).select();
+    els.save.disabled = false;
+    if (res.error || !res.data || !res.data.length) {
+      showMsg("Could not save: " + (res.error ? res.error.message : "not allowed. Sign in with the owner email."));
+      return;
     }
-    persist();
+    await loadEvents();
     resetForm();
-    render();
+    refresh();
   });
 
   els.cancel.addEventListener("click", function () { resetForm(); render(); });
@@ -864,12 +938,21 @@
       els.form.scrollIntoView({ behavior: "smooth", block: "start" });
       els.event.focus();
     } else if (confirm('Are you sure you want to delete "' + entry.event + '"?\n\nThis cannot be undone.')) {
-      entries = entries.filter(function (e) { return e.id !== id; });
-      if (editingId === id) resetForm();
-      persist();
-      render();
+      deleteEvent(id);
     }
   });
+
+  async function deleteEvent(id) {
+    if (!sb || !signedIn) { alert("Please sign in first."); return; }
+    var res = await sb.from("events").delete().eq("id", id).select("id");
+    if (res.error || !res.data || !res.data.length) {
+      alert("Could not delete: " + (res.error ? res.error.message : "not allowed. Sign in with the owner email."));
+      return;
+    }
+    if (editingId === id) resetForm();
+    await loadEvents();
+    refresh();
+  }
 
   els.search.addEventListener("input", render);
   els.filter.addEventListener("change", function () { render(); renderTimeline(); });
@@ -900,49 +983,91 @@
   $("export-json").addEventListener("click", function () {
     download("event-log-backup-" + today() + ".json", JSON.stringify(entries, null, 2), "application/json");
   });
-  $("export-share").addEventListener("click", function () {
-    download("events.json", JSON.stringify(chronological(), null, 2), "application/json");
-  });
   $("import-btn").addEventListener("click", function () { $("import-file").click(); });
   $("import-file").addEventListener("change", function (ev) {
     var file = ev.target.files[0];
     if (!file) return;
     var reader = new FileReader();
-    reader.onload = function () {
+    reader.onload = async function () {
+      var list;
       try {
         var data = JSON.parse(reader.result);
         if (!Array.isArray(data)) throw new Error("bad");
-        var used = {};
-        var clean = data.filter(function (e) { return e && e.event; }).map(function (e, i) {
-          var id = parseInt(e.id != null ? e.id : e.no, 10);
-          if (!id || used[id]) { id = 1000000 + i; }
-          used[id] = true;
-          return {
-            id: id,
-            date: String(e.date || ""),
-            event: String(e.event),
-            category: CATEGORIES.indexOf(RENAMED[e.category] || e.category) !== -1 ? (RENAMED[e.category] || e.category) : "Others",
-            location: LOCATIONS.indexOf(e.location) !== -1 ? e.location : "",
-            notes: String(e.notes || "")
-          };
-        });
-        if (!confirm("Replace the current " + entries.length + " events with " + clean.length + " events from this backup?")) return;
-        entries = clean;
-        persist();
-        resetForm();
-        render();
+        list = data.map(cleanEntry).filter(Boolean);
       } catch (e) {
         alert("This file is not a valid backup. Choose a .json file downloaded from this app.");
+        $("import-file").value = ""; return;
       }
       $("import-file").value = "";
+      if (!list.length) { alert("No usable events were found in this file."); return; }
+      if (!confirm("Add " + list.length + " events from this file to the database?\n\nEvents that already exist (same date, event and category) are skipped.")) return;
+      try {
+        var r = await importEntries(list);
+        await loadEvents(); refresh();
+        alert("Done. " + r.added + " added, " + r.skipped + " skipped as already present.");
+      } catch (err) { alert("Import failed: " + err.message); }
     };
     reader.readAsText(file);
   });
 
+  // ---- Sign in / out ----
+  function localLeftovers() {
+    try {
+      if (localStorage.getItem(MIGRATED_KEY) === "1") return [];
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var data = raw ? JSON.parse(raw) : [];
+      return Array.isArray(data) ? data.map(cleanEntry).filter(Boolean) : [];
+    } catch (e) { return []; }
+  }
+  function offerMigration() {
+    var list = localLeftovers();
+    if (!signedIn || !list.length) { if (!list.length) showNotice("", false); return; }
+    showNotice("This browser still holds <strong>" + list.length + "</strong> events from the old version. " +
+      '<button type="button" id="migrate-go">Move them to the database</button>' +
+      '<button type="button" class="ghost small" id="migrate-skip">Not now</button>', false);
+    $("migrate-go").addEventListener("click", async function () {
+      this.disabled = true;
+      try {
+        var r = await importEntries(list);
+        try { localStorage.setItem(MIGRATED_KEY, "1"); } catch (e) {}
+        await loadEvents(); refresh();
+        showNotice("Moved: " + r.added + " events added, " + r.skipped + " already present.", false);
+      } catch (err) { showNotice("Could not move the events: " + esc(err.message), true); }
+    });
+    $("migrate-skip").addEventListener("click", function () { showNotice("", false); });
+  }
+  function applySession(session) {
+    signedIn = !!session;
+    document.body.classList.toggle("readonly", !signedIn);
+    $("auth-out").hidden = signedIn;
+    $("auth-in").hidden = !signedIn;
+    $("who").textContent = signedIn ? session.user.email : "";
+    if (!signedIn) { resetForm(); showNotice("", false); }
+    else offerMigration();
+  }
+  $("login-form").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    $("auth-msg").textContent = "";
+    $("auth-btn").disabled = true;
+    var res = await sb.auth.signInWithPassword({ email: $("auth-email").value.trim(), password: $("auth-pass").value });
+    $("auth-btn").disabled = false;
+    if (res.error) { $("auth-msg").textContent = "Could not sign in: " + res.error.message; return; }
+    $("auth-pass").value = "";
+  });
+  $("signout").addEventListener("click", function () { sb.auth.signOut(); });
+
   // ---- Start ----
   resetForm();
-  render();
-  renderTimeline();
+  refresh();
+  document.body.classList.add("readonly");
+  if (!sb) {
+    $("auth-out").hidden = true;
+    showNotice("The database is not connected yet. Open <code>supabase-config.js</code> and paste your Supabase Project URL and anon key.", true);
+  } else {
+    sb.auth.onAuthStateChange(function (event, session) { applySession(session); });
+    loadEvents().then(function (ok) { if (ok) refresh(); });
+    sb.auth.getSession().then(function (r) { applySession(r.data.session); });
+  }
 })();
 </script>
 </body>
