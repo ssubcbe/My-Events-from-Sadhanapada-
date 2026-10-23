@@ -283,7 +283,6 @@
 
 <div id="tip" class="tip" role="tooltip"></div>
 
-<script src="supabase-config.js"></script>
 <script>
 (function () {
   "use strict";
@@ -663,19 +662,18 @@
   applyView();
 
 
-  // ---- Load the events from Supabase (read-only, public) ----
-  var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-  function normalise(rows) {
-    if (!Array.isArray(rows)) return [];
-    return rows.filter(function (r) { return r && r.event && DATE_RE.test(String(r.event_date || "")); }).map(function (r) {
-      var cat = RENAMED[r.category] || r.category;
+  // ---- Load the events published in events.json ----
+  function normalise(data) {
+    if (!Array.isArray(data)) return [];
+    return data.filter(function (e) { return e && e.event && e.date; }).map(function (e, i) {
+      var cat = RENAMED[e.category] || e.category;
       return {
-        id: r.id,
-        date: String(r.event_date),
-        event: String(r.event),
+        id: e.id != null ? e.id : (e.no != null ? e.no : i + 1),
+        date: String(e.date),
+        event: String(e.event),
         category: CATEGORIES.indexOf(cat) !== -1 ? cat : "Others",
-        location: LOCATIONS.indexOf(r.location) !== -1 ? r.location : "",
-        notes: String(r.notes || "")
+        location: LOCATIONS.indexOf(e.location) !== -1 ? e.location : "",
+        notes: String(e.notes || "")
       };
     });
   }
@@ -693,35 +691,16 @@
   els.filter.addEventListener("change", renderTimeline);
   els.locFilter.addEventListener("change", renderTimeline);
 
-  function fail(msg) {
-    $("load-error").textContent = msg;
-    $("load-error").hidden = false;
-  }
-  var URL_ = window.SUPABASE_URL, KEY_ = window.SUPABASE_ANON_KEY;
-  if (!URL_ || !KEY_ || /PASTE_/.test(URL_) || /PASTE_/.test(KEY_)) {
-    fail("The timeline is not connected to the database yet.");
-  } else {
-    // PostgREST read, 1000 rows per request
-    (async function () {
-      var all = [], from = 0, size = 1000;
-      for (;;) {
-        var r = await fetch(URL_.replace(/\/+$/, "") + "/rest/v1/events?select=*&order=event_date.asc,id.asc", {
-          headers: { apikey: KEY_, Authorization: "Bearer " + KEY_, Range: from + "-" + (from + size - 1) },
-          cache: "no-store"
-        });
-        if (!r.ok) throw new Error("status " + r.status);
-        var rows = await r.json();
-        all = all.concat(rows);
-        if (rows.length < size) break;
-        from += size;
-      }
-      entries = normalise(all);
+  fetch("events.json", { cache: "no-store" })
+    .then(function (r) { if (!r.ok) throw new Error("not found"); return r.json(); })
+    .then(function (data) {
+      entries = normalise(data);
       fillFilters();
       renderTimeline();
-    })().catch(function () {
-      fail("The events could not be loaded. Please try again in a little while.");
+    })
+    .catch(function () {
+      $("load-error").hidden = false;
     });
-  }
 })();
 </script>
 </body>
